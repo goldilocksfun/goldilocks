@@ -8,10 +8,24 @@ function rng(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t
 const KINDS=[['Ocean world',.78,0,[.35,.6,.9]],['Verdant terra',.55,0,[.45,.75,.45]],['Dune world',.14,0,[.85,.6,.35]],['Glacial world',.5,0,[.8,.88,.95]],['Volcanic world',.08,0,[.85,.4,.25]],['Archipelago',.92,0,[.4,.75,.85]],['Gas giant',0,1,[.9,.78,.6]]];
 const HZI=.95,HZO=1.37;
 const CK=[{a:0x2c4a3a,b:0x6b7f4e,c:0xc8b88a,water:.78,ice:.5,life:.85,atm:0x4f9dff,cloud:1},{a:0x2a4a2a,b:0x5d7a3c,c:0xb0a070,water:.55,ice:.3,life:1,atm:0x5fb6ff,cloud:.9},{a:0x6a3a1e,b:0xb27a45,c:0xe7c48c,water:.14,ice:.15,life:.2,atm:0xffb070,cloud:.35},{a:0x6f7f96,b:0xb3c4d6,c:0xf2f6fa,water:.5,ice:1,life:.15,atm:0x9fd4ff,cloud:.7},{a:0x24160f,b:0x5a2a1c,c:0xa8562c,water:.08,ice:0,life:0,atm:0xff7a3d,cloud:.25},{a:0x3a5a34,b:0x8a8a58,c:0xd8cfa0,water:.92,ice:.4,life:.7,atm:0x55c8ff,cloud:.85},{a:0x8a6a48,b:0xd8b88a,c:0xf3e2c0,water:0,ice:0,life:0,atm:0xffd49a,cloud:0,gas:1}];
+const AR={lava:['Lava world',0x140a08,0x2e1610,0x5a2a1a,0,0,0,0xff6a30,.15],dune:['Dune world',0x6a3a1e,0xb27a45,0xe7c48c,.08,.1,.05,0xffb070,.2],ocean:['Ocean world',0x2c4a3a,0x6b7f4e,0xc8b88a,.9,.4,.7,0x4f9dff,1],ice:['Glacial world',0x6f7f96,0xb3c4d6,0xf2f6fa,.35,1,.05,0x9fd4ff,.6],
+ verdant:['Verdant terra',0x2a4a2a,0x5d7a3c,0xb0a070,.55,.3,1,0x5fb6ff,.85],gas:['Gas giant',0x8a6a48,0xd8b88a,0xf3e2c0,0,0,0,0xffd49a,0],eye:['Eyeball world',0x4a5a50,0x7a7a60,0xcfc6a8,.7,1,.4,0x8ac8ff,.35],
+ sulf:['Sulfur world',0x5a5418,0xb0a030,0xe8dc70,.04,0,0,0xd8e060,.7],barren:['Barren rock',0x3a3634,0x6a645e,0xa09890,0,.1,0,0x000000,0],superE:['Ringed super earth',0x34463a,0x7a6e52,0xc8b890,.45,.4,.6,0x6ab0ff,.8]};
+const GASP=[[0x8a6a48,0xd8b88a,0xf3e2c0,0xffd49a],[0x1c3a7a,0x4a7ac8,0xb8d4f0,0x7ab0ff],[0xb8a878,0xe8dcb0,0xfff6dc,0xfff0c0],[0x6a2018,0xc06040,0xf0c0a0,0xff9a70],[0x3a5a5a,0x7ab0a8,0xd0f0e8,0x9ff0e0]];
+const MAPK=[x=>x<.75?'ocean':'eye',x=>x<.65?'verdant':'superE',x=>x<.5?'dune':x<.75?'sulf':'barren',x=>x<.6?'ice':'eye',x=>x<.7?'lava':'barren',x=>x<.6?'ocean':'verdant',()=>'gas'];
 function detailFor(s,force){const r=rng(hash(s));let ki=Math.floor(r()*7);if(force!=null)ki=force;const k=CK[ki];const tint=c=>new THREE.Color(c).offsetHSL((r()-.5)*.06,(r()-.5)*.12,(r()-.5)*.06);
  const au=.82+r()*.5;const a=tint(k.a),b=tint(k.b),c=tint(k.c);const seed=r()*60,ring=k.gas?r()<.85:r()<.4,moon=r()<.75,tilt=(r()-.5)*.9;
  const f=rng(hash(s+'f'));const mass=k.gas?40+f()*260:.4+f()*2;const rad=k.gas?8+f()*4:Math.pow(mass,.27);const moons=moon?1+Math.floor(f()*3):0;
- return{ki,cls:KINDS[ki][0],k,au,a,b,c,seed,ring,moons,tilt,mass,rad,atm:Math.min(99,Math.round(k.gas?95+f()*4:k.cloud*70+f()*25)),water:Math.min(99,Math.round(k.water*100*(.9+f()*.2))),chem:Math.min(99,Math.round(k.life*80+f()*15))}}
+ const g=rng(hash(s+'v'));const key=MAPK[ki](g());const A=AR[key];const sh=(g()-.5)*.16,ss=(g()-.5)*.25,sl=(g()-.5)*.12;const T=c=>new THREE.Color(c).offsetHSL(sh,ss,sl);
+ let pa=[A[1],A[2],A[3],A[7]];if(key==='gas')pa=GASP[Math.floor(g()*GASP.length)];const v={key,cls:A[0],a:T(pa[0]),b:T(pa[1]),c:T(pa[2]),atmC:new THREE.Color(pa[3]).offsetHSL((g()-.5)*.08,0,0),water:Math.min(.97,A[4]*(.7+g()*.5)),ice:A[5]*(.6+g()*.5),life:A[6],cloud:A[8]*(.6+g()*.5),
+  cont:.6+g()*1.8,cs:.6+g()*1.3,cb:key==='gas'?1:1+g()*2.2,rot:key==='eye'?0:.02+g()*.1,tilt:(g()-.5)*(g()<.1?2.6:1)};
+ const rare=[];const R2=()=>g();const rr=[R2(),R2(),R2(),R2(),R2()];
+ const aur=v.atmC.getHex()&&rr[0]<.1&&key!=='gas'?1:0;if(aur)rare.push('Aurora');const storm=key==='gas'?(rr[1]<.4?1:0):0;if(storm)rare.push('Storm eye');
+ const rift=(key!=='gas'&&key!=='ocean'&&rr[2]<.12)?1:0;if(rift)rare.push('Canyon rifts');let ringN=key==='gas'?(g()<.8?1:0):key==='superE'?1:(g()<.12?1:0);if(ringN&&rr[3]<.1){ringN=2;rare.push('Double rings')}
+ const city=v.life>.5&&rr[4]<.12?1:0;if(city)rare.push('City lights');
+ const mo=[];for(let i=0;i<moons;i++)mo.push({s:.05+g()*.11,r:2.5+i*.9+g()*.6,w:(.08+g()*.2)*(g()<.5?1:-1),inc:(g()-.5)*.5,col:new THREE.Color().setHSL(g()*.15,.1+g()*.2,.35+g()*.35),ice:g()<.3?.8:0});
+ if(key==='barren')v.cloud=0;Object.assign(v,{aur,storm,rift,ringN,city,rare,mo,lava:key==='lava'?1:0,crater:key==='barren'?1:key==='dune'?.35:key==='lava'?.2:0,eye:key==='eye'?1:0,sulf:key==='sulf'?1:0,ringC:new THREE.Color().setHSL(.08+g()*.06,.25+g()*.3,.55+g()*.2)});
+ return{ki,...v,k:{water:v.water,ice:v.ice,life:v.life,atm:v.atmC,cloud:v.cloud,gas:key==='gas'?1:0},au,seed,ring:ringN>0,moons,mass:key==='gas'?mass:key==='superE'?mass*2.6:mass,rad:key==='superE'?Math.pow(mass*2.6,.27):rad,atm:Math.min(99,Math.round(v.key==='gas'?95+f()*4:v.cloud*70+f()*25)),water:Math.min(99,Math.round(v.water*100*(.9+f()*.2))),chem:Math.min(99,Math.round(v.life*80+f()*15))}}
 function paramsFor(w){const r=rng(hash(w));const k=KINDS[Math.floor(r()*KINDS.length)];const au=.82+r()*.5;for(let i=0;i<13;i++)r();const L='BCDFGHJKLMNPRSTVXZ'[Math.floor(r()*18)];
  const K=Math.round(278/Math.sqrt(au)*(1-k[1]*.08)+(k[2]?-60:0));const o=rng(hash(w+'o'));
  return{w,cls:k[0],col:k[3],au,K,e:.01+o()*.11,inc:(o()-.5)*.12,node:o()*6.283,peri:o()*6.283,M0:o()*6.283,mass:1,name:'GL '+(hash(w+'n')%9000+1000)+' '+L,zone:au>=HZI&&au<=HZO}}
@@ -37,21 +51,48 @@ function posOf(p,t,out){const M=p.M0+t*6.2831853/Math.pow(p.au,1.5);let E=M;for(
  let x=p.au*(Math.cos(E)-p.e),y=p.au*Math.sqrt(1-p.e*p.e)*Math.sin(E);const cw=Math.cos(p.peri),sw=Math.sin(p.peri);[x,y]=[x*cw-y*sw,x*sw+y*cw];
  const ci=Math.cos(p.inc),si=Math.sin(p.inc);let X=x,Y=y*si,Z=y*ci;const cn=Math.cos(p.node),sn=Math.sin(p.node);return out.set(X*cn-Z*sn,Y,X*sn+Z*cn)}
 /* sun, zone, inner planets for context */
-const sun=new THREE.Points(new THREE.BufferGeometry().setAttribute('position',new THREE.BufferAttribute(new Float32Array(3),3)),new THREE.ShaderMaterial(Object.assign({uniforms:{px:U.px,dpr:U.dpr,op:U.op},
+const sun=new THREE.Points(new THREE.BufferGeometry().setAttribute('position',new THREE.BufferAttribute(new Float32Array(3),3)),new THREE.ShaderMaterial(Object.assign({uniforms:{px:U.px,dpr:U.dpr,op:U.op,fo:{value:0}},
  vertexShader:`uniform float px,dpr;void main(){vec4 mv=modelViewMatrix*vec4(position,1.);gl_Position=projectionMatrix*mv;gl_PointSize=clamp(.44*px/-mv.z,128.*dpr,640.*dpr);}`,
- fragmentShader:`uniform float op;void main(){float r=length(gl_PointCoord-.5)*2.;vec2 q=gl_PointCoord-.5;float rd=r/.24;float disk=smoothstep(1.,.93,rd);float mu=sqrt(max(1.-rd*rd,0.));float limb=.42+.58*pow(mu,.6);vec3 dc=mix(vec3(1.,.5,.2),vec3(1.,.95,.84),pow(mu,.8))*limb*1.45;float o=max(r-.24,0.);float ang=atan(q.y,q.x);float cor=(exp(-o*16.)*.55+exp(-o*5.)*.2)*(1.+.12*sin(ang*7.+o*9.)*sin(ang*3.));cor*=smoothstep(1.,.5,r);vec3 col=dc*disk+vec3(1.,.66,.34)*cor*(1.-disk);gl_FragColor=vec4(col*max(op,.35),1.);}`},add)));sun.frustumCulled=false;scene.add(sun);
+ fragmentShader:`uniform float op,fo;void main(){float r=length(gl_PointCoord-.5)*2.;vec2 q=gl_PointCoord-.5;float rd=r/.24;float disk=smoothstep(1.,.93,rd);float mu=sqrt(max(1.-rd*rd,0.));float limb=.42+.58*pow(mu,.6);vec3 dc=mix(vec3(1.,.5,.2),vec3(1.,.95,.84),pow(mu,.8))*limb*1.45;float o=max(r-.24,0.);float ang=atan(q.y,q.x);float cor=(exp(-o*16.)*.55+exp(-o*5.)*.2)*(1.+.12*sin(ang*7.+o*9.)*sin(ang*3.));cor*=smoothstep(1.,.5,r);vec3 col=dc*disk+vec3(1.,.66,.34)*cor*(1.-disk);gl_FragColor=vec4(col*max(op,.35)*fo,1.);}`},add)));sun.frustumCulled=false;scene.add(sun);
 const hz=new THREE.Mesh(new THREE.RingGeometry(HZI-.01,HZO+.01,256,1),new THREE.ShaderMaterial(Object.assign({side:THREE.DoubleSide,uniforms:{op:U.op},vertexShader:`varying vec3 vP;void main(){vP=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
  fragmentShader:`uniform float op;varying vec3 vP;void main(){float r=length(vP.xy);float w=fwidth(r)*1.2;float ed=1.-smoothstep(0.,w,abs(r-${HZI}));ed=max(ed,1.-smoothstep(0.,w,abs(r-${HZO})));gl_FragColor=vec4(vec3(.83,.68,.4)*(.11+ed*.75)*op,1.);}`},add)));hz.rotation.x=-Math.PI/2;scene.add(hz);
 const ringLines=[];[.5,1,2,5].forEach(a=>{const pts=[];for(let i=0;i<=256;i++){const t=i/256*6.2832;pts.push(new THREE.Vector3(Math.cos(t)*a,0,Math.sin(t)*a))}const l=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:0xebe5d8,transparent:true,opacity:.16,depthWrite:false}));scene.add(l);ringLines.push(l)});
+const SR=.36;const SUNV=`varying vec3 vP,vW;void main(){vP=position;vW=(modelMatrix*vec4(position,1.)).xyz;gl_Position=projectionMatrix*viewMatrix*vec4(vW,1.);}`;
+const DITH=`float dith(){return(fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)-.5)/255.;}`;
+const sunSM=new THREE.ShaderMaterial({uniforms:{t:{value:0}},vertexShader:SUNV,fragmentShader:NOISE+DITH+`uniform float t;varying vec3 vP,vW;
+void main(){vec3 p=normalize(vP);vec3 V=normalize(cameraPosition-vW);float mu=clamp(dot(normalize(vW),V),0.,1.);float tt=t*.05;
+ vec3 q=p*46.;q+=vec3(snoise(p*4.+tt*.4),snoise(p*4.+7.1-tt*.4),snoise(p*4.+3.3))*1.1;
+ float g=snoise(q+vec3(0.,0.,tt*2.));float g2=snoise(q*2.3+vec3(tt*3.,0.,0.));float gran=smoothstep(-.6,.9,g*.75+g2*.25);float lane=1.-smoothstep(.0,.22,abs(g+.1));
+ float lat=abs(p.y);float belt=smoothstep(.06,.18,lat)*smoothstep(.6,.38,lat);float sn=snoise(p*3.1+11.)*.6+snoise(p*8.+3.)*.3+snoise(p*20.)*.1;
+ float umb=smoothstep(.6,.68,sn)*belt;float pen=smoothstep(.45,.58,sn)*belt;float fac=smoothstep(.28,.45,sn)*(1.-pen)*pow(1.-mu,1.2)*belt;
+ float I=.84+.18*gran-.07*lane;I*=1.-pen*.4;I*=1.-umb*.65;I*=1.-.6*(1.-mu)-.14*(1.-mu*mu);I+=fac*.45;
+ vec3 c=mix(vec3(.62,.2,.05),vec3(1.,.62,.28),smoothstep(.2,.62,I));c=mix(c,vec3(1.,.92,.78),smoothstep(.7,1.05,I));
+ gl_FragColor=vec4(c*I*1.3+dith(),1.);}`});
+const sunM=new THREE.Mesh(new THREE.SphereGeometry(SR,MOB?64:112,MOB?48:80),sunSM);scene.add(sunM);
+const corSM=new THREE.ShaderMaterial(Object.assign({uniforms:{t:{value:0}},vertexShader:`varying vec2 vU;void main(){vU=uv*2.-1.;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+ fragmentShader:NOISE+DITH+`uniform float t;varying vec2 vU;void main(){vec2 q=vU*3.4;float r=length(q);float a=atan(q.y,q.x);float h=max(r-1.,0.);vec2 cs=vec2(cos(a),sin(a));
+ float st=.55+.45*fbm3(vec3(cs*2.2,t*.015))+.25*snoise(vec3(cs*6.,t*.02));
+ float cor=(exp(-h*6.)*.5+exp(-h*2.)*.2*st+exp(-h*.8)*.06*st)*smoothstep(3.4,2.3,r);
+ float pn=fbm3(vec3(cs*4.5,h*2.5-t*.04));float loop=smoothstep(.22,.5,pn)*exp(-h*10.);
+ float fil=smoothstep(.3,.0,abs(snoise(vec3(cs*9.,h*9.-t*.12))))*exp(-h*13.)*smoothstep(.25,.55,pn);
+ float ch=exp(-h*70.);float fp=fract(t/11.);float fa=floor(t/11.)*2.39;float da=abs(mod(a-fa+3.1416,6.2832)-3.1416);float fl=exp(-da*da*40.)*exp(-h*5.)*pow(sin(fp*3.1416),6.);
+ vec3 col=vec3(1.,.72,.44)*cor+vec3(1.,.3,.1)*(loop*.85+fil*1.1)+vec3(1.,.38,.18)*ch*.8+vec3(1.,.8,.6)*fl*1.4;col*=smoothstep(.985,1.005,r);
+ gl_FragColor=vec4(max(col+dith(),0.),1.);}`},add));
+const corM=new THREE.Mesh(new THREE.PlaneGeometry(SR*6.8,SR*6.8),corSM);scene.add(corM);
 const sel=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(Array.from({length:384},()=>new THREE.Vector3())),new THREE.LineBasicMaterial({color:0xd4ad66,transparent:true,opacity:.75,depthWrite:false}));sel.visible=false;sel.frustumCulled=false;scene.add(sel);
 const mk=new THREE.Points(new THREE.BufferGeometry().setAttribute('position',new THREE.BufferAttribute(new Float32Array(3),3)),new THREE.ShaderMaterial(Object.assign({uniforms:{s:{value:30},dpr:U.dpr,ph:{value:0}},vertexShader:`uniform float s,dpr;void main(){gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);gl_PointSize=s*dpr;}`,
  fragmentShader:`uniform float ph;void main(){float r=length(gl_PointCoord-.5)*2.;float ring=1.-smoothstep(0.,.08,abs(r-.82));float dot=smoothstep(.2,.12,r);gl_FragColor=vec4(vec3(.83,.68,.4)*(ring*(.5+.5*ph)+dot),1.);}`},add)));mk.visible=false;mk.frustumCulled=false;scene.add(mk);
 const SEG=MOB?72:128,PR=.002;const dG=new THREE.Group();dG.visible=false;dG.scale.setScalar(PR);scene.add(dG);const tG=new THREE.Group();dG.add(tG);
 const col3=()=>({value:new THREE.Color()});
-const pM=new THREE.ShaderMaterial({uniforms:{cA:col3(),cB:col3(),cC:col3(),seed:{value:1},water:{value:0},life:{value:0},ice:{value:0},t:{value:0},gas:{value:0},cshadow:{value:.8}},vertexShader:planetVS,fragmentShader:planetFS});
+const FSX=planetFS.replace('uniform vec3 cA','uniform float cont,lava,crater,eye,sulf,storm,rift,aur,cityK;uniform vec3 cA').replace('fbm(p*1.5+seed)','fbm(p*1.5*cont+seed)').replace('sin(p.y*18.','sin(p.y*18.*cont')
+ .replace('col=mix(col,cC,smoothstep(.3,.9,snoise(p*vec3(1.,6.,1.)+seed)));','col=mix(col,cC,smoothstep(.3,.9,snoise(p*vec3(1.,6.,1.)+seed)));vec2 sv=vec2(atan(p.z,p.x)-1.2,(p.y+.28)*2.6);float se=exp(-dot(sv,sv)*9.)*storm;float sw=sin(length(sv)*38.-atan(sv.y,sv.x)*3.);col=mix(col,mix(cC,vec3(.8,.38,.22),.6)*(.85+.15*sw),se);')
+ .replace('col=mix(land,oc,isSea);','col=mix(land,oc,isSea);if(crater>0.){vec3 cp=p*6.5;vec3 ci=floor(cp);float cr=0.;for(int x=-1;x<=1;x++)for(int y=-1;y<=1;y++)for(int z=-1;z<=1;z++){vec3 c=ci+vec3(float(x),float(y),float(z));vec3 h3=fract(sin(vec3(dot(c,vec3(127.1,311.7,74.7)),dot(c,vec3(269.5,183.3,246.1)),dot(c,vec3(113.5,271.9,124.6))))*43758.5453);float rad=.15+.32*h3.x;float dd=length(cp-c-h3)/rad;cr+=smoothstep(.72,1.,dd)*smoothstep(1.3,1.,dd)*.3-smoothstep(1.,.55,dd)*.32;}col*=1.+cr*crater;}float rf=smoothstep(.03,.0,abs(snoise(p*vec3(1.6,.6,1.6)+seed*.7)))*rift;col=mix(col,col*.22,rf);if(eye>0.){float e=dot(normalize(vN),normalize(-vW));col=mix(vec3(.88,.93,1.),col,smoothstep(.15,.42,e));col=mix(col,oc,smoothstep(.62,.8,e)*.9);}col=mix(col,col*vec3(1.1,1.04,.45)+vec3(.05,.04,0.),sulf*.5);')
+ .replace('*life*life;lit+=vec3(1.,.7,.35)*city','*cityK;lit+=vec3(1.,.7,.35)*city')
+ .replace(/gl_FragColor=vec4\(lit,1\.\);\}$/,'if(lava>0.){float ck=1.-smoothstep(.0,.06,abs(snoise(p*4.5*cont+seed)));ck=max(ck,(1.-smoothstep(.0,.04,abs(snoise(p*11.+seed*2.))))*.8);float gl=ck*(.65+.35*snoise(p*18.+t*.15));lit+=vec3(1.,.36,.07)*gl*1.7*(1.-day*.45);}if(aur>0.){float la=abs(p.y);float band=smoothstep(.68,.78,la)*smoothstep(.95,.83,la);float cur=.5+.5*snoise(vec3(atan(p.z,p.x)*3.,t*.3,p.y*4.));lit+=vec3(.2,1.,.55)*band*cur*(1.-day)*1.1;}if(sulf>0.){lit=mix(lit,vec3(.72,.7,.3)*(day*.85+.03),.3*(.4+fr));}gl_FragColor=vec4(lit,1.);}');
+const pM=new THREE.ShaderMaterial({uniforms:{cA:col3(),cB:col3(),cC:col3(),seed:{value:1},water:{value:0},life:{value:0},ice:{value:0},t:{value:0},gas:{value:0},cshadow:{value:.8},cont:{value:1},lava:{value:0},crater:{value:0},eye:{value:0},sulf:{value:0},storm:{value:0},rift:{value:0},aur:{value:0},cityK:{value:0}},vertexShader:planetVS,fragmentShader:FSX});
 const pB=new THREE.Mesh(new THREE.SphereGeometry(1,SEG,SEG),pM);tG.add(pB);
-const cM=new THREE.ShaderMaterial({uniforms:{t:{value:0},u:{value:0}},transparent:true,depthWrite:false,vertexShader:planetVS,
- fragmentShader:NOISE+`uniform float t,u;varying vec3 vP,vN,vW;void main(){vec3 p=normalize(vP);vec3 q=p*3.2;q+=vec3(fbm3(p*2.+t*.015),fbm3(p*2.+5.2-t*.012),0.)*.6;q.x+=t*.02*(1.-abs(p.y));float n=fbm(q);n+=snoise(p*14.+t*.03)*.08;float a=smoothstep(.05,.45,n)*u;vec3 L=normalize(-vW);float d=smoothstep(-.1,.4,dot(normalize(vN),L));gl_FragColor=vec4(vec3(.92)*(d*.9+.02),a*(.12+d*.62));}`});
+const cM=new THREE.ShaderMaterial({uniforms:{t:{value:0},u:{value:0},cs:{value:1},cb:{value:1}},transparent:true,depthWrite:false,vertexShader:planetVS,
+ fragmentShader:NOISE+`uniform float t,u,cs,cb;varying vec3 vP,vN,vW;void main(){vec3 p=normalize(vP);vec3 q=p*3.2*cs;q.y*=cb;q+=vec3(fbm3(p*2.+t*.015),fbm3(p*2.+5.2-t*.012),0.)*.6;q.x+=t*.02*(1.-abs(p.y));float n=fbm(q);n+=snoise(p*14.+t*.03)*.08;float a=smoothstep(.05,.45,n)*u;vec3 L=normalize(-vW);float d=smoothstep(-.1,.4,dot(normalize(vN),L));gl_FragColor=vec4(vec3(.92)*(d*.9+.02),a*(.12+d*.62));}`});
 const pC=new THREE.Mesh(new THREE.SphereGeometry(1.012,SEG,SEG),cM);tG.add(pC);
 const aM=new THREE.ShaderMaterial({uniforms:{u:{value:1},c:col3()},transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.BackSide,vertexShader:planetVS,
  fragmentShader:`uniform float u;uniform vec3 c;varying vec3 vP,vN,vW;void main(){vec3 V=normalize(cameraPosition-vW);vec3 N=normalize(vN);float rim=pow(1.-abs(dot(N,V)),1.6);float edge=smoothstep(0.,.35,abs(dot(N,V)));vec3 L=normalize(-vW);float d=smoothstep(-.4,.5,dot(N,L));gl_FragColor=vec4(c*rim*edge*d*u*2.,1.);}`});
@@ -60,9 +101,11 @@ const rM=new THREE.ShaderMaterial({transparent:true,side:THREE.DoubleSide,depthW
  fragmentShader:`uniform vec3 c;uniform float pr;varying vec3 vP,vW,vC;void main(){float r=length(vP.xy);float b=.55+.45*sin(r*46.)*sin(r*13.+1.);b*=.75+.25*sin(r*120.);float a=smoothstep(1.45,1.52,r)*smoothstep(2.35,2.2,r)*(1.-smoothstep(1.86,1.9,r)*smoothstep(1.95,1.91,r)*.8);vec3 L=normalize(-vW);vec3 tc=vC-vW;float sh=1.-(1.-smoothstep(.92,1.04,length(cross(tc,L))/pr))*step(0.,dot(tc,L));gl_FragColor=vec4(c*b*.7*(.35+.65*sh),a*b*.6);}`});
 const pR=new THREE.Mesh(new THREE.RingGeometry(1.4,2.4,192,1),rM);pR.rotation.x=-Math.PI/2+.28;tG.add(pR);
 const mM=new THREE.ShaderMaterial({uniforms:{cA:{value:new THREE.Color(0x8a8078)},cB:{value:new THREE.Color(0x6a645e)},cC:{value:new THREE.Color(0xd8d2ca)},seed:{value:4},water:{value:0},life:{value:0},ice:{value:0},t:{value:0},gas:{value:0},cshadow:{value:0}},vertexShader:planetVS,fragmentShader:planetFS});
-const moonsM=[.13,.09,.07].map(s=>{const m=new THREE.Mesh(new THREE.SphereGeometry(s,40,40),mM);dG.add(m);return m});
+const moonsM=[0,1,2].map(()=>{const m=new THREE.Mesh(new THREE.SphereGeometry(1,40,40),mM.clone());dG.add(m);return m});const pR2=new THREE.Mesh(pR.geometry,rM.clone());pR2.scale.setScalar(1.5);pR.add(pR2);
 let D=null;function applyDetail(p){D=p.demo?detailFor('sim'+p.i,p.au>3?6:null):detailFor(p.w);const u=pM.uniforms;u.cA.value.copy(D.a);u.cB.value.copy(D.b);u.cC.value.copy(D.c);u.seed.value=D.seed;u.water.value=D.k.water;u.ice.value=D.k.ice;u.life.value=D.k.life;u.gas.value=D.k.gas||0;
- cM.uniforms.u.value=D.k.cloud;aM.uniforms.c.value.set(D.k.atm);tG.rotation.z=D.tilt;pR.visible=D.ring;moonsM.forEach((m,i)=>m.visible=i<D.moons);mM.uniforms.seed.value=D.seed+3;pC.visible=D.k.cloud>0}
+ cM.uniforms.u.value=D.k.cloud;cM.uniforms.cs.value=D.cs;cM.uniforms.cb.value=D.cb;aM.uniforms.c.value.copy(D.atmC);tG.rotation.z=D.tilt;pR.visible=D.ring;pR2.visible=D.ringN>1;rM.uniforms.c.value.copy(D.ringC);pR2.material.uniforms.c.value.copy(D.ringC).offsetHSL(.02,-.1,-.1);
+ Object.assign(u,{});['cont','lava','crater','eye','sulf','storm','rift','aur'].forEach(k=>u[k].value=D[k]);u.cityK.value=D.city?1:D.life*D.life*.3;
+ moonsM.forEach((m,i)=>{const o=D.mo[i];m.visible=!!o;if(!o)return;m.scale.setScalar(o.s);const mu=m.material.uniforms;mu.cA.value.copy(o.col);mu.cB.value.copy(o.col).offsetHSL(0,0,-.12);mu.cC.value.copy(o.col).offsetHSL(0,0,.18);mu.seed.value=D.seed+i*7+3;mu.ice.value=o.ice});pC.visible=D.k.cloud>0}
 function orbitLine(p){const A=sel.geometry.attributes.position;const q={...p};const v=new THREE.Vector3();for(let i=0;i<A.count;i++){q.M0=i/A.count*6.2832;posOf(q,0,v);A.setXYZ(i,v.x,v.y,v.z)}A.needsUpdate=true;sel.visible=true}
 /* neighbourhood stars and galaxy */
 const LY=63241;
@@ -77,7 +120,7 @@ const galaxy=starField(MOB?40000:140000,()=>{const arm=Math.floor(gr()*4);const 
  const h=(gr()-.5)*GR*(core?.08:.025);const x=GC.x+Math.cos(th)*r,z=GC.z+Math.sin(th)*r;const c=core?[1,.82,.58]:gr()<.25?[.95,.75,.65]:[.72,.82,1];return[x,h,z,c,core?1.4:1+gr()*.8]});
 /* data */
 let real=[],demo=[];const realPts=cloud(4096),demoPts=cloud(MOB?10000:50000);demoPts.visible=false;
-function makeDemo(){const n=MOB?10000:50000,r=rng(7);const out=[];for(let i=0;i<n;i++){const au=Math.exp(Math.log(.25)+r()*Math.log(160));out.push({au,e:r()*.28,inc:(r()-.5)*.2,node:r()*6.283,peri:r()*6.283,M0:r()*6.283,col:au>=HZI&&au<=HZO?[.83,.68,.4]:[.55,.55,.6],demo:1,i})}return out}
+function makeDemo(){const n=MOB?10000:50000,r=rng(7);const out=[];for(let i=0;i<n;i++){const au=Math.exp(Math.log(.55)+r()*Math.log(80));out.push({au,e:r()*.28,inc:(r()-.5)*.2,node:r()*6.283,peri:r()*6.283,M0:r()*6.283,col:au>=HZI&&au<=HZO?[.83,.68,.4]:[.55,.55,.6],demo:1,i})}return out}
 async function loadReal(){if(!API){$('#smsg').textContent='Claims open soon. Turn on the preview layer to see a full system.';return}
  try{const r=await fetch(API+'/api/planets');const j=await r.json();real=(j.planets||[]).map(x=>Object.assign(paramsFor(x.wallet),{no:x.no}));fill(realPts,real.slice(0,4096),3,.0012);
   $('#nReal').textContent=real.length;$('#nZone').textContent=real.filter(p=>p.zone).length;if(!real.length)$('#smsg').textContent='No planets claimed yet. Turn on the preview layer to see a full system.'}catch(e){$('#smsg').textContent='Live planet data is unavailable right now.'}}
@@ -98,10 +141,10 @@ function pick(x,y,click){const p=nearest(x,y);if(click){if(p)select(p);return}if
 const fmt=(v,d)=>v.toFixed(d);
 function zoneOf(au){return au<HZI?'Too hot':au>HZO?'Too cold':'Habitable zone'}
 function describe(p,d){const z=p.au<HZI?'inside the hot edge':p.au>HZO?'beyond the cold edge':'inside the habitable zone';const w=d.k.gas?'deep banded clouds':d.water>70?'mostly ocean':d.water>35?'open seas and continents':d.water>10?'scattered lakes':'dry rock';
- const x=[];if(d.k.ice>.6)x.push('broad ice caps');if(d.moons)x.push(d.moons===1?'one moon':d.moons===2?'two moons':'three moons');if(d.ring)x.push('a ring system');return cap(d.cls.toLowerCase())+' '+z+', '+w+(x.length?', '+x.join(' and '):'')+'.'}
+ const x=[];if(d.k.ice>.6)x.push('broad ice caps');if(d.moons)x.push(d.moons===1?'one moon':d.moons===2?'two moons':'three moons');if(d.ringN>1)x.push('a double ring system');else if(d.ring)x.push('a ring system');if(d.lava)x.push('glowing lava cracks');if(d.eye)x.push('one face locked toward the star');return cap(d.cls.toLowerCase())+' '+z+', '+w+(x.length?', '+x.join(' and '):'')+'.'}
 const cap=s=>s[0].toUpperCase()+s.slice(1);
-function spec(p,d){const K=Math.round(278/Math.sqrt(p.au)*(1-d.k.water*.08)+(d.k.gas?-60:0));const days=Math.round(365.25*Math.pow(p.au,1.5));
- const rows=[['Wallet',p.demo?'Preview only':p.w.slice(0,4)+'..'+p.w.slice(-4)],['Class',d.cls],['Mass',fmt(d.mass,d.mass<10?2:0)+' Earth'],['Radius',fmt(d.rad,2)+' Earth'],['Orbit',fmt(p.au,2)+' AU'],['Period',days.toLocaleString('en-US')+' days'],['Surface temp',K+' K'],['Atmosphere',d.atm+' %'],['Water',d.water+' %'],['Chemistry',d.chem+' %'],['Zone',zoneOf(p.au)],['Moons',String(d.moons)],['Rings',d.ring?'Yes':'None']];
+function spec(p,d){const K=Math.round(278/Math.sqrt(p.au)*(1-d.k.water*.08)+(d.k.gas?-60:0)+({lava:420,sulf:140,barren:-10}[d.key]||0));const days=Math.round(365.25*Math.pow(p.au,1.5));
+ const rows=[['Wallet',p.demo?'Preview only':p.w.slice(0,4)+'..'+p.w.slice(-4)],['Class',d.cls],['Mass',fmt(d.mass,d.mass<10?2:0)+' Earth'],['Radius',fmt(d.rad,2)+' Earth'],['Orbit',fmt(p.au,2)+' AU'],['Period',days.toLocaleString('en-US')+' days'],['Surface temp',K+' K'],['Atmosphere',d.atm+' %'],['Water',d.water+' %'],['Chemistry',d.chem+' %'],['Zone',zoneOf(p.au)],['Moons',String(d.moons)],['Rings',d.ringN>1?'Double':d.ring?'Yes':'None'],['Rare trait',d.rare.length?d.rare.join(', '):'None']];
  $('#qSpec').innerHTML='';for(const [k,v] of rows){const r=document.createElement('div');const t=document.createElement('dt');t.textContent=k;const e=document.createElement('dd');e.textContent=v;if(k==='Zone'&&v==='Habitable zone')e.className='gold';r.append(t,e);$('#qSpec').appendChild(r)}}
 let VIEW=0,FLY=0;
 function select(p,noFly){picked=p;orbitLine(p);applyDetail(p);$('#panel').hidden=false;
@@ -126,10 +169,10 @@ $('#home').addEventListener('click',()=>{exitPlanet();setFollow(false);S.tth=HOM
 cv.addEventListener('pointerleave',()=>{$('#tip').hidden=true});
 /* labels */
 const LB=[];const lay=$('#labels');function lab(txt,cls,pos){const e=document.createElement('span');e.className='olab mono '+cls;e.textContent=txt;lay.appendChild(e);LB.push({e,p:new THREE.Vector3(...pos)})}
-lab('G2V','star',[0,0,0]);lab('Too hot','hot',[0,0,.6]);lab('Habitable zone 0.95 to 1.37 AU','hz',[0,0,(HZI+HZO)/2]);lab('Too cold','cold',[0,0,1.72]);
+lab('G2V','star',[0,0,SR+.13]);lab('Too hot','hot',[0,0,.74]);lab('Habitable zone 0.95 to 1.37 AU','hz',[0,0,(HZI+HZO)/2]);lab('Too cold','cold',[0,0,1.72]);
 [.5,1,2,5].forEach(a=>lab(a+' AU','au',[a*.7071,0,-a*.7071]));
 function placeLabels(sys,d){const show=sys>.3&&d<60&&!(VIEW&&d<.2);lay.style.opacity=show?Math.min(1,sys):0;if(!show)return;for(const l of LB){scr.copy(l.p).project(cam);const vis=scr.z<1&&Math.abs(scr.x)<1.1&&Math.abs(scr.y)<1.1;l.e.style.display=vis?'':'none';if(vis)l.e.style.transform=`translate(${(scr.x+1)/2*W}px,${(1-scr.y)/2*H}px) translate(-50%,-50%)`}
- const sd=LB[0];sd.e.style.transform+=` translateY(${Math.max(54,Math.min(150,.11*U.px.value/DPR/Math.max(d,.01)))}px)`}
+ }
 /* loop */
 const ft=[];let q=1,last=performance.now();
 function fmtScale(d){if(d<.1)return fmt(d*1000,1)+' milli AU';if(d<2000)return fmt(d,d<10?2:0)+' AU';const ly=d/LY;return ly<1?fmt(d,0).replace(/\B(?=(\d{3})+(?!\d))/g,',')+' AU':ly<1000?fmt(ly,1)+' light years':Math.round(ly).toLocaleString('en-US')+' light years'}
@@ -142,13 +185,14 @@ function frame(now){requestAnimationFrame(frame);if(document.hidden)return;const
  const d=Math.exp(S.ld);const sp=Math.sin(S.ph);cam.position.set(S.tgt.x+d*sp*Math.cos(S.th),S.tgt.y+d*Math.cos(S.ph),S.tgt.z+d*sp*Math.sin(S.th));cam.lookAt(S.tgt);
  VO+=((VIEW?1:0)-VO)*k;if(VO>.002)cam.setViewOffset(W,H,MOB?0:-W*.09*VO,MOB?H*.17*VO:0,W,H);else cam.clearViewOffset();
  cam.near=Math.max(d*.002,1e-6);cam.far=d<.08?6:Math.max(d*40,GR*4);cam.updateProjectionMatrix();
- const sys=1-Math.min(1,Math.max(0,(Math.log(d)-Math.log(300))/(Math.log(6000)-Math.log(300))));U.op.value=sys;const close=VIEW&&d<.06;hz.visible=sys>.01;realPts.visible=sys>.01&&!close;demoPts.visible=$('#demo').checked&&!close;dG.visible=!!(picked&&d<.3);if(dG.visible){posOf(picked,U.t.value,tmp);dG.position.copy(tmp);const tt=now/1000;pB.rotation.y=tt*.05;pC.rotation.y=tt*.062;pM.uniforms.t.value=cM.uniforms.t.value=tt;moonsM.forEach((m,i)=>{const r=2.9+i*.9,w=.22/(1+i*.6),ph=i*2.1+D.seed;m.position.set(Math.cos(tt*w+ph)*r,Math.sin(tt*w+ph)*.35*r*.2,Math.sin(tt*w+ph)*r)})}ringLines.forEach(l=>l.material.opacity=.16*sys);sel.material.opacity=.75*sys*(close?.25:1);mk.material.opacity=1;if(VIEW)mk.visible=false;
+ const sys=1-Math.min(1,Math.max(0,(Math.log(d)-Math.log(300))/(Math.log(6000)-Math.log(300))));U.op.value=sys;const close=VIEW&&d<.06;hz.visible=sys>.01;realPts.visible=sys>.01&&!close;demoPts.visible=$('#demo').checked&&!close;dG.visible=!!(picked&&d<.3);if(dG.visible){posOf(picked,U.t.value,tmp);dG.position.copy(tmp);const tt=now/1000;pB.rotation.y=tt*D.rot;pC.rotation.y=tt*(D.rot*1.2+.004);pM.uniforms.t.value=cM.uniforms.t.value=tt;moonsM.forEach((m,i)=>{const o=D.mo[i];if(!o)return;const r=o.r,w=o.w,ph=i*2.1+D.seed;m.position.set(Math.cos(tt*w+ph)*r,Math.sin(tt*w+ph)*.35*r*.2,Math.sin(tt*w+ph)*r)})}ringLines.forEach(l=>l.material.opacity=.16*sys);sel.material.opacity=.75*sys*(close?.25:1);mk.material.opacity=1;if(VIEW)mk.visible=false;
  near.material.uniforms.op.value=Math.min(1,Math.max(0,(Math.log(d)-Math.log(800))/2))*(1-Math.min(1,Math.max(0,(Math.log(d)-Math.log(2e8))/1.5)))+ .25;
  galaxy.material.uniforms.op.value=.045*Math.min(1,Math.max(0,(Math.log(d)-Math.log(3e8))/2.2));
  galaxy.visible=galaxy.material.uniforms.op.value>.001;
  const sc=fmtScale(d*.8);if(sc!==lastScale){lastScale=sc;$('#scale').textContent=sc}
  if(hoverQ&&!drag&&!VIEW&&now-lastHover>90){lastHover=now;pick(hoverQ.clientX,hoverQ.clientY,false);hoverQ=null}
  if(picked){posOf(picked,U.t.value,tmp);mk.geometry.attributes.position.setXYZ(0,tmp.x,tmp.y,tmp.z);mk.geometry.attributes.position.needsUpdate=true;const ph=.5+.5*Math.sin(now*.005);mk.material.uniforms.ph.value=ph;mk.material.uniforms.s.value=40+ph*16}
+ sunSM.uniforms.t.value=corSM.uniforms.t.value=now/1000;corM.quaternion.copy(cam.quaternion);const camS=cam.position.length();sunM.visible=corM.visible=camS<500;sun.material.uniforms.fo.value=Math.min(1,Math.max(0,(camS-60)/240));
  placeLabels(sys,d);
  renderer.render(scene,cam)}
 addEventListener('resize',size,{passive:true});size();loadReal();requestAnimationFrame(frame);
