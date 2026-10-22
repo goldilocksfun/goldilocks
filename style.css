@@ -188,3 +188,7 @@ html.rm .c{transform:none!important}html.rm #cur,html.rm #cur-dot{display:none}h
 html.rm .orbitsvg .spin,html.rm svg.mark .orb,html.rm .l-orb g{animation:none}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
 :focus-visible{outline:1px solid var(--gold);outline-offset:4px}
+.l-enter{position:absolute;left:50%;bottom:90px;transform:translate(-50%,10px);opacity:0;pointer-events:none;display:flex;align-items:center;gap:14px;font-family:JB;font-size:11px;letter-spacing:.32em;text-transform:uppercase;color:var(--ink);padding:14px 26px;border:1px solid rgba(245,201,122,.4);border-radius:40px;transition:opacity .9s var(--ease),transform .9s var(--ease),border-color .4s,background .4s}
+.l-enter i{width:6px;height:6px;border-radius:50%;background:var(--gold);box-shadow:0 0 10px var(--gold);animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.3;transform:scale(.7)}}
+#loader.ready .l-enter{opacity:1;transform:translate(-50%,0);pointer-events:auto}.l-enter:hover{background:rgba(245,201,122,.08);border-color:var(--gold)}

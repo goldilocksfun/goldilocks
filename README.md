@@ -29,7 +29,7 @@ Then open http://localhost:8000
 - `main.js` 3D scene, scroll story, cards, sandbox, audio
 - `vendor/` three, gsap, lenis
 - `fonts/` Space Grotesk, Instrument Serif, JetBrains Mono (SIL Open Font License)
-- `audio/theme.mp3` original score, Starlight Drift
+- `audio/theme.mp3` original score, The Organ's Crescendo
 - `assets/` social preview and icons
 
 ## Accessibility
