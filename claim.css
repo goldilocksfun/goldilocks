@@ -77,6 +77,6 @@ body.cl{cursor:auto;--lvl:.4;min-height:100vh}body.cl a,body.cl button{cursor:po
 @media(max-width:1000px){.cl-hero{grid-template-columns:1fr;padding:44vh 22px 40px;gap:24px}.pcard{justify-self:stretch;width:auto;margin:0;align-self:auto}
  .cl-vig{background:linear-gradient(180deg,transparent 0%,transparent 30%,rgba(2,3,8,.8) 55%,#020308 100%)}
  .cl-board{grid-template-columns:1fr;padding:20px 22px 90px}.cl-board>div{padding:26px 22px}.navlink{display:none}}
-@media(max-width:760px){.cl h1{font-size:50px}.nav{padding:20px 22px}.step{grid-template-columns:28px 1fr;padding:18px 18px;gap:12px}.step>.sbtn,.step>.ibadge{grid-column:2;justify-self:start}.tick{top:22px;margin-top:0;right:16px}.step[data-s="invite"].done .ibadge{margin-right:0}
+@media(max-width:760px){.step,.cl-board>div,.pcard{background:linear-gradient(180deg,rgba(14,16,26,.94),rgba(7,9,16,.93))}.cl h1{font-size:50px}.nav{padding:20px 22px}.step{grid-template-columns:28px 1fr;padding:18px 18px;gap:12px}.step>.sbtn,.step>.ibadge{grid-column:2;justify-self:start}.tick{top:22px;margin-top:0;right:16px}.step[data-s="invite"].done .ibadge{margin-right:0}
  .cl-foot{flex-direction:column;padding:22px}.sx p{max-width:none}.steps{margin-top:32px}}
 html.rm .rv,html.rm .step,html.rm .pcard{transition:none}
