@@ -12,7 +12,10 @@ function create(db,save,opts={}){
     for(const w of new Set([...Object.keys(bal),...Object.keys(S.snaps)])){const b=BigInt(bal[w]||0);const prev=S.snaps[w];S.snaps[w]=prev==null?String(b):String(b<BigInt(prev)?b:BigInt(prev));}
     for(const w in bal){const m=G.massFrom(bal[w],supply,C);if(m>0){const p=ensure(w,'hold');if(p.holdSince==null)p.holdSince=t;}}
     for(const w in S.planets){const p=S.planets[w];if(G.massFrom(bal[w]||0,supply,C)===0&&p.src!=='free')p.holdSince=null;}
-    S.lastBal=bal;save();}
+    S.lastBal=bal;
+    // preview mass and position for planets that have not had a tick yet
+    for(const w in S.planets){const p=S.planets[w];const held=G.massFrom(bal[w]||0,supply,C);p.mass=Math.max(p.src==='free'?C.FREE_MASS:0,p.lastTick<0?held:Math.min(held,p.mass||held));if(p.lastTick<0){p.d=+G.distance(p,Math.floor(t/C.TICK_MS),C).toFixed(5);p.zone=G.zoneOf(p.d,C);}}
+    save();}
   // Advance accounting to the current tick (catches up missed ticks deterministically).
   function advance(){syncClaims();const target=Math.floor(now()/C.TICK_MS);if(S.tick<0)S.tick=target-1;let n=0;
     while(S.tick<target&&n<500){S.tick++;n++;const t=now();
