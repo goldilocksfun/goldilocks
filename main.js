@@ -48,8 +48,8 @@ $('#snd').addEventListener('click',e=>{e.stopPropagation();soundOn=!soundOn;loca
 
 /* ---------- renderer ---------- */
 const canvas=$('#gl');const renderer=new THREE.WebGLRenderer({canvas,antialias:false,powerPreference:'high-performance'});
-const DPR=Math.min(devicePixelRatio,1.75);renderer.setPixelRatio(DPR);renderer.setSize(innerWidth,innerHeight);
-renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
+const DPR=Math.min(devicePixelRatio||1,2);renderer.setPixelRatio(DPR);renderer.setSize(innerWidth,innerHeight);
+renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.0;renderer.outputColorSpace=THREE.SRGBColorSpace;
 const scene=new THREE.Scene();const cam=new THREE.PerspectiveCamera(innerWidth<760?60:42,innerWidth/innerHeight,.05,4000);
 
 const NOISE=`
@@ -170,22 +170,30 @@ you.add(new THREE.Points(bg,burstMat));
 const shock=[];for(let i=0;i<3;i++){const m=new THREE.Mesh(new THREE.RingGeometry(.97,1,256),new THREE.MeshBasicMaterial({color:new THREE.Color(1.1,.8,.4),transparent:true,opacity:0,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false}));m.rotation.x=-Math.PI/2;you.add(m);shock.push(m)}
 
 /* ---------- post ---------- */
-const composer=new EffectComposer(renderer);composer.setPixelRatio(DPR);composer.setSize(innerWidth,innerHeight);
+const isGL2=renderer.capabilities.isWebGL2;const rtMS=new THREE.WebGLRenderTarget(innerWidth*DPR,innerHeight*DPR,{type:THREE.HalfFloatType,samples:isGL2?4:0});const composer=new EffectComposer(renderer,rtMS);composer.setPixelRatio(DPR);composer.setSize(innerWidth,innerHeight);
 composer.addPass(new RenderPass(scene,cam));
-const bloom=new UnrealBloomPass(new THREE.Vector2(innerWidth/2,innerHeight/2),.8,.55,.92);composer.addPass(bloom);
+const bloom=new UnrealBloomPass(new THREE.Vector2(innerWidth/2,innerHeight/2),.62,.5,.94);composer.addPass(bloom);
 composer.addPass(new OutputPass());
 const finalPass=new ShaderPass({uniforms:{tDiffuse:{value:null},t:{value:0},flash:{value:0},gold:{value:0},lvl:{value:0},sun:{value:new THREE.Vector2(.5,.5)},sunI:{value:0},asp:{value:innerWidth/innerHeight},ca:{value:1}},
 vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
 fragmentShader:`uniform sampler2D tDiffuse;uniform float t,sunI,asp,ca,flash,gold,lvl;uniform vec2 sun;varying vec2 vUv;
 float h(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
-void main(){vec2 c=vUv-.5;float r2=dot(c,c);vec2 off=c*r2*.012*ca;vec3 col;col.r=texture2D(tDiffuse,vUv+off).r;col.g=texture2D(tDiffuse,vUv).g;col.b=texture2D(tDiffuse,vUv-off).b;
+void main(){vec2 c=vUv-.5;float r2=dot(c,c);vec2 off=c*r2*.005*ca;vec3 col;col.r=texture2D(tDiffuse,vUv+off).r;col.g=texture2D(tDiffuse,vUv).g;col.b=texture2D(tDiffuse,vUv-off).b;
 vec2 sv=sun-.5;vec3 fl=vec3(0.);for(int i=1;i<=4;i++){float f=float(i);vec2 gp=.5-sv*(f*.45-.2);vec2 d=(vUv-gp);d.x*=asp;float s=.012+f*.012;fl+=vec3(.9-f*.1,.6,.4+f*.12)*smoothstep(s,s*.4,length(d))*.05;}
 vec2 sd=vUv-sun;float streak=exp(-abs(sd.y)*260.)*exp(-abs(sd.x*asp)*2.5)*.35;fl+=vec3(1.,.75,.5)*streak;col+=fl*sunI;
 float lum=dot(col,vec3(.299,.587,.114));col=mix(col,col*vec3(.92,1.,1.08),smoothstep(.35,0.,lum)*.6);col=mix(col,col*vec3(1.06,1.,.9),smoothstep(.4,1.,lum)*.5);col+=vec3(1.,.9,.75)*flash*.14;col=mix(col,col*vec3(1.12,1.,.82)+vec3(.03,.02,0.),gold);col*=1.+lvl*.12;
-float vig=smoothstep(1.05,.25,length(c*vec2(asp*.8,1.)));col*=mix(.45,1.,vig);
-col+=(h(vUv*vec2(1920.,1080.)+fract(t*7.))-.5)*.045;gl_FragColor=vec4(col,1.);}`});
+float vig=smoothstep(1.05,.25,length(c*vec2(asp*.8,1.)));col*=mix(.55,1.,vig);col=mix(vec3(dot(col,vec3(.2126,.7152,.0722))),col,1.06);col=max(col-vec3(.006,.005,.0),0.)+vec3(.0,.002,.006)*(1.-vig);
+vec2 q=gl_FragCoord.xy+fract(t*7.)*97.;col+=(h(q)+h(q+17.3)-1.)*(1./255.)*1.5;col+=(h(vUv*vec2(960.,540.)+fract(t*3.))-.5)*.012;gl_FragColor=vec4(col,1.);}`});
 composer.addPass(finalPass);
-addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);composer.setSize(innerWidth,innerHeight);cam.aspect=innerWidth/innerHeight;cam.fov=innerWidth<760?60:42;cam.updateProjectionMatrix();finalPass.uniforms.asp.value=cam.aspect;[puffMat,dustMat,burstMat].forEach(m=>m.uniforms.h.value=innerHeight*DPR)});
+const fxaa=new ShaderPass({uniforms:{tDiffuse:{value:null},rs:{value:new THREE.Vector2(1/(innerWidth*DPR),1/(innerHeight*DPR))}},
+vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+fragmentShader:`uniform sampler2D tDiffuse;uniform vec2 rs;varying vec2 vUv;float L(vec3 c){return dot(c,vec3(.299,.587,.114));}
+void main(){vec3 nw=texture2D(tDiffuse,vUv+vec2(-1.,-1.)*rs).rgb,ne=texture2D(tDiffuse,vUv+vec2(1.,-1.)*rs).rgb,sw=texture2D(tDiffuse,vUv+vec2(-1.,1.)*rs).rgb,se=texture2D(tDiffuse,vUv+vec2(1.,1.)*rs).rgb;vec4 m=texture2D(tDiffuse,vUv);
+float a=L(nw),b=L(ne),c=L(sw),d=L(se),e=L(m.rgb);float mn=min(e,min(min(a,b),min(c,d))),mx=max(e,max(max(a,b),max(c,d)));
+vec2 dir=vec2(-((a+b)-(c+d)),((a+c)-(b+d)));float rd=max((a+b+c+d)*.03125,1./128.);float rm=1./(min(abs(dir.x),abs(dir.y))+rd);dir=clamp(dir*rm,-8.,8.)*rs;
+vec3 A=.5*(texture2D(tDiffuse,vUv+dir*(1./3.-.5)).rgb+texture2D(tDiffuse,vUv+dir*(2./3.-.5)).rgb);vec3 B=A*.5+.25*(texture2D(tDiffuse,vUv-dir*.5).rgb+texture2D(tDiffuse,vUv+dir*.5).rgb);float lb=L(B);
+gl_FragColor=vec4((lb<mn||lb>mx)?A:B,1.);}`});composer.addPass(fxaa);
+addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);composer.setSize(innerWidth,innerHeight);cam.aspect=innerWidth/innerHeight;cam.fov=innerWidth<760?60:42;cam.updateProjectionMatrix();finalPass.uniforms.asp.value=cam.aspect;fxaa.uniforms.rs.value.set(1/(innerWidth*renderer.getPixelRatio()),1/(innerHeight*renderer.getPixelRatio()));[puffMat,dustMat,burstMat].forEach(m=>m.uniforms.h.value=innerHeight*DPR)});
 
 /* ---------- scroll state ---------- */
 const st={p:0};let P=0;
@@ -244,15 +252,15 @@ function frame(){requestAnimationFrame(frame);const f0=performance.now();const r
  sunScr.set(0,0,0).project(cam);const onS=sunScr.z<1&&Math.abs(sunScr.x)<1.2&&Math.abs(sunScr.y)<1.2;finalPass.uniforms.sun.value.set(sunScr.x*.5+.5,sunScr.y*.5+.5);finalPass.uniforms.sunI.value=onS?ign*(1-ce*.6):0;
  corMat.uniforms.b.value*=1-ce*.9;finalPass.uniforms.flash.value=flash*ign;finalPass.uniforms.gold.value=eio(j)*.6;document.body.classList.toggle('cine',P>.875&&vis);bloom.strength+=flash*.5+lvl*.35;finalPass.uniforms.lvl.value=lvl;dustMat.uniforms.op.value*=1-ce*.5;
  composer.render();
- const ft=performance.now()-f0;perf.n++;perf.sum+=ft;if(!perf.low&&perf.n>90&&perf.sum/perf.n>24&&!window.__noAdapt){perf.low=true;renderer.setPixelRatio(1);composer.setPixelRatio(1);composer.setSize(innerWidth,innerHeight)}
+ const ft=performance.now()-f0;perf.n++;perf.sum+=ft;if(!perf.low&&perf.n>90&&perf.sum/perf.n>24&&!window.__noAdapt){perf.low=true;const pr=Math.max(1,DPR*.7);renderer.setPixelRatio(pr);composer.setPixelRatio(pr);composer.setSize(innerWidth,innerHeight);fxaa.uniforms.rs.value.set(1/(innerWidth*pr),1/(innerHeight*pr))}
  if(firstFrame){firstFrame=false;loadT=100}
 }
 renderer.compile(scene,cam);loadT=Math.max(loadT,80);frame();
 
 /* ---------- action cards: shared WebGL renderer ---------- */
 const CR=new THREE.WebGLRenderer({antialias:true,alpha:true,premultipliedAlpha:false,preserveDrawingBuffer:true,powerPreference:'high-performance'});
-CR.toneMapping=THREE.ACESFilmicToneMapping;CR.toneMappingExposure=1.1;CR.setPixelRatio(1);
-const CSZ=Math.round(Math.min(Math.max(240*Math.min(devicePixelRatio||1,2),300),460));CR.setSize(CSZ,CSZ,false);
+CR.toneMapping=THREE.ACESFilmicToneMapping;CR.toneMappingExposure=1.02;CR.outputColorSpace=THREE.SRGBColorSpace;CR.setPixelRatio(1);
+const CSZ=Math.round(Math.min(Math.max(300*Math.min(devicePixelRatio||1,2),420),640));CR.setSize(CSZ,CSZ,false);
 const glowVS=`varying vec2 vU;void main(){vU=uv*2.-1.;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`;
 function glowMesh(size,color,k=3.){const m=new THREE.Mesh(new THREE.PlaneGeometry(size,size),new THREE.ShaderMaterial({uniforms:{c:{value:new THREE.Color(color)},i:{value:1},k:{value:k}},transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,vertexShader:glowVS,fragmentShader:`uniform vec3 c;uniform float i,k;varying vec2 vU;void main(){float r=length(vU);float a=exp(-r*k)*smoothstep(1.,.5,r);gl_FragColor=vec4(c*a*i,1.);}`}));return m}
 function makeStar(r){const g=new THREE.Group();const sm=sunMat.clone();sm.uniforms.b.value=1;const core=new THREE.Mesh(new THREE.SphereGeometry(r,64,64),sm);g.add(core);const cm=corMat.clone();cm.uniforms.b.value=1.1;const co=new THREE.Mesh(new THREE.PlaneGeometry(r*12,r*12),cm);co.position.z=-.01;g.add(co);g.userData.mats=[sm,cm];return g}
@@ -294,7 +302,7 @@ const SCENES={
    const firing=ph<.66;const tx=Math.cos(a),ty=Math.sin(a);ring.position.set(x+tx*.34,y+ty*.34,.1);ring.material.uniforms.i.value=firing?.9+Math.random()*.3:0;
    if(firing)for(let i=0;i<5;i++){const sp=1.4+Math.random()*1.4,j=(Math.random()-.5)*.35;ps.emit({x:x+tx*.3,y:y+ty*.3,vx:(tx-ty*j)*sp,vy:(ty+tx*j)*sp,life:.45+Math.random()*.35,s:.16+Math.random()*.12,grow:1.6,grad:fireGrad})}
    ps.update(dt,p=>{p.vx*=.97;p.vy*=.97});this.label=firing?'BURN  DV 0.42':'COAST  ORBIT 0.98 AU'}}},
- comet(){const s=baseScene(),c=ccam(6.4,.2,10,34);const pl=makePlanet(1.25,{a:0x7a4a2a,b:0xb07a4a,c:0xe0c39a,water:0,ice:0,seed:11.7},{clouds:.0,atm:.6,atmColor:0x8fb8ff});pl.position.set(6.9,-.55,0);s.add(pl);
+ comet(){const s=baseScene(),c=ccam(6.4,.2,10,34);const pl=makePlanet(1.25,{a:0x7a4a2a,b:0xb07a4a,c:0xe0c39a,water:0,ice:0,seed:11.7},{clouds:.0,atm:.6,atmColor:0x8fb8ff});pl.position.set(6.9,-.55,0);s.add(pl);{const k=new THREE.DirectionalLight(0xfff1dc,1.6);k.position.set(2,2,8);s.add(k);const rg=glowMesh(5.2,0x3a6cff,3.2);rg.material.uniforms.i.value=.35;rg.position.set(6.9,-.55,-1.5);s.add(rg)}
   const nuc=makeRock(.085,3.3,0xcfe6f2,true);s.add(nuc);const coma=glowMesh(1.2,0x9fe8ff,4.5);s.add(coma);const ion=new PS(s,320),dust=new PS(s,320),fx=new PS(s,200);const flash=glowMesh(3.2,0xbfeeff,3.5);flash.position.set(6.3,.25,.6);s.add(flash);
   const rip=new THREE.Mesh(new THREE.RingGeometry(.97,1,128),new THREE.MeshBasicMaterial({color:0x9fe0ff,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false}));rip.position.copy(flash.position);s.add(rip);
   return {s,c,mats:pl.userData.mats,label:'',update(T,dt){const ph=(T%4.4)/4.4;const hit=.52;pl.userData.body.rotation.y+=dt*.12;

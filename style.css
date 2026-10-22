@@ -192,3 +192,16 @@ html.rm .orbitsvg .spin,html.rm svg.mark .orb,html.rm .l-orb g{animation:none}
 .l-enter i{width:6px;height:6px;border-radius:50%;background:var(--gold);box-shadow:0 0 10px var(--gold);animation:pulse 1.6s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.3;transform:scale(.7)}}
 #loader.ready .l-enter{opacity:1;transform:translate(-50%,0);pointer-events:auto}.l-enter:hover{background:rgba(245,201,122,.08);border-color:var(--gold)}
+
+/* v7 refinement */
+:root{--gold:#f4c983;--gold2:#e8995a;--teal:#6fe6c8;--ink:#f1f3f7;--dim:#8a93a6;--line:rgba(255,255,255,.085)}
+html,body,#loader{background:#010207}
+body{text-rendering:optimizeLegibility;-moz-osx-font-smoothing:grayscale}
+.card{border-color:rgba(255,255,255,.08)}
+.card::after{border-color:rgba(244,201,131,.7);box-shadow:0 0 0 1px rgba(244,201,131,.08) inset,0 24px 60px -30px rgba(244,201,131,.35)}
+.card:hover{background:linear-gradient(180deg,rgba(244,201,131,.04),rgba(111,230,200,.015))}
+.cv{border-radius:6px;box-shadow:0 0 0 1px rgba(255,255,255,.06) inset,0 18px 40px -24px rgba(0,0,0,.9)}
+.card canvas{background:radial-gradient(circle at 50% 42%,#0c1426,#03050c 72%);image-rendering:auto}
+.card p{color:#98a1b3}
+.l-bar i{background:linear-gradient(90deg,var(--gold2),var(--gold),var(--teal));box-shadow:0 0 12px rgba(244,201,131,.5)}
+.l-enter{transition:color .4s,box-shadow .5s}.l-enter:hover{box-shadow:0 0 30px -6px rgba(244,201,131,.45)}
