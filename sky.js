@@ -30,34 +30,35 @@ export function createSky(scene,camera,o={}){
  // streaks: comets (head + dust tail + ion tail) and shooting stars, built from camera facing ribbons
  const tailVS=`attribute vec2 aUV;varying vec2 vU;void main(){vU=aUV;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`;
  const tailFS=`uniform vec3 c;uniform float op,k,t,seed;varying vec2 vU;void main(){float u=vU.x,v=vU.y;float w=mix(.18,1.,pow(u,.7));float x=v/w;float fall=pow(1.-u,k);
-  float streak=.75+.25*sin(x*9.+u*14.+seed)*sin(x*23.-u*31.+seed*2.);float a=exp(-x*x*3.2)*fall*streak*smoothstep(0.,.03,u);gl_FragColor=vec4(c*a*op,1.);}`;
+  float ax=min(abs(x),1.);float wv=exp(-ax*ax*3.)*(1.-ax*ax)*(1.-ax*ax);float a=wv*fall*smoothstep(0.,.08,u)*smoothstep(1.,.85,u);
+  float dith=(fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)-.5)/255.;gl_FragColor=vec4(max(c*a*op+dith,0.),1.);}`;
  function ribbon(color,k,seg=24){const n=seg+1,pos=new Float32Array(n*2*3),uv=new Float32Array(n*2*2),idx=[];for(let i=0;i<n;i++){uv.set([i/seg,-1,i/seg,1],i*4);if(i<seg){const a=i*2;idx.push(a,a+1,a+2,a+1,a+3,a+2)}}
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('aUV',new THREE.BufferAttribute(uv,2));g.setIndex(idx);
   const m=new THREE.ShaderMaterial(Object.assign({uniforms:{c:{value:new THREE.Color(color)},op:{value:0},k:{value:k},t:{value:0},seed:{value:Math.random()*9}},vertexShader:tailVS,fragmentShader:tailFS},add));const me=new THREE.Mesh(g,m);me.frustumCulled=false;me.visible=false;G.add(me);return me}
  const headM=()=>new THREE.ShaderMaterial(Object.assign({uniforms:{c:{value:new THREE.Color(1,.95,.85)},op:{value:0}},vertexShader:`varying vec2 vU;void main(){vU=uv*2.-1.;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
-  fragmentShader:`uniform vec3 c;uniform float op;varying vec2 vU;void main(){float r=length(vU);float a=exp(-r*r*60.)*1.4+exp(-r*6.)*.25;a*=smoothstep(1.,.7,r);gl_FragColor=vec4(c*a*op,1.);}`},add));
+  fragmentShader:`uniform vec3 c;uniform float op;varying vec2 vU;void main(){float r=length(vU);float rr=min(r,1.);float nuc=exp(-rr*rr*260.)*1.3;float coma=exp(-rr*rr*9.)*.32;float w=(1.-rr*rr);w*=w;float a=(nuc+coma)*w;float dith=(fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)-.5)/255.;gl_FragColor=vec4(max(c*a*op+dith,0.),1.);}`},add));
  const tmp=new THREE.Vector3(),side=new THREE.Vector3(),view=new THREE.Vector3();
  function layRibbon(me,head,dir,len,wid,curve){const P=me.geometry.attributes.position,n=P.count/2;view.copy(head).normalize();
   for(let i=0;i<n;i++){const u=i/(n-1);tmp.copy(head).addScaledVector(dir,-len*u);if(curve)tmp.addScaledVector(curve,len*u*u*.18);side.crossVectors(dir,view).normalize().multiplyScalar(wid*(.18+.82*Math.pow(u,.7)));
    P.setXYZ(i*2,tmp.x-side.x,tmp.y-side.y,tmp.z-side.z);P.setXYZ(i*2+1,tmp.x+side.x,tmp.y+side.y,tmp.z+side.z)}P.needsUpdate=true}
  const comets=[],shoots=[];
  for(let i=0;i<(mob?1:2);i++){const h=new THREE.Mesh(new THREE.PlaneGeometry(1,1),headM());h.visible=false;h.frustumCulled=false;G.add(h);
-  comets.push({head:h,dust:ribbon(0xffd6a0,1.5),ion:ribbon(0x9fd8ff,2.4),life:-1,next:rnd(2.5,7)+i*9})}
+  comets.push({head:h,dust:ribbon(0xffdcb0,1.6,64),ion:ribbon(0x8fc8ff,2.2,32),life:-1,next:rnd(4,10)+i*30})}
  for(let i=0;i<2;i++)shoots.push({r:ribbon(0xffffff,1.2,8),life:-1,next:rnd(6,14)+i*7});
  const f=new THREE.Vector3(),rt=new THREE.Vector3(),up=new THREE.Vector3();
  function spawnPath(D,spread){camera.getWorldDirection(f);rt.crossVectors(f,camera.up).normalize();up.crossVectors(rt,f).normalize();
   const hh=Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*D,ww=hh*camera.aspect;const ang=rnd(0,6.28);const d2=new THREE.Vector2(Math.cos(ang),Math.sin(ang)*.7).normalize();
   const c=new THREE.Vector3().copy(f).multiplyScalar(D).addScaledVector(rt,rnd(-.5,.5)*ww*spread).addScaledVector(up,rnd(-.4,.6)*hh*spread);
   const dir=new THREE.Vector3().addScaledVector(rt,d2.x).addScaledVector(up,d2.y).addScaledVector(f,rnd(-.15,.15)).normalize();return{c,dir,ww}}
- function spawnComet(cm){const D=R*.8,{c,dir,ww}=spawnPath(D,1);cm.c=c;cm.dir=dir;cm.span=ww*rnd(.9,1.5);cm.len=ww*rnd(.3,.48);cm.wid=cm.len*rnd(.11,.16);cm.dur=rnd(9,15);cm.life=0;
-  cm.curve=new THREE.Vector3().crossVectors(dir,c).normalize().multiplyScalar(Math.random()<.5?-1:1);cm.head.scale.setScalar(cm.wid*2.4);[cm.head,cm.dust,cm.ion].forEach(m=>m.visible=true)}
+ function spawnComet(cm){const D=R*.8,{c,dir,ww}=spawnPath(D,1);cm.c=c;cm.dir=dir;cm.span=ww*rnd(.45,.75);cm.len=ww*rnd(.14,.24);cm.wid=cm.len*rnd(.09,.13);cm.dur=rnd(18,28);cm.life=0;
+  cm.curve=new THREE.Vector3().crossVectors(dir,c).normalize().multiplyScalar(Math.random()<.5?-1:1);cm.head.scale.setScalar(cm.wid*1.5);[cm.head,cm.dust,cm.ion].forEach(m=>m.visible=true)}
  function spawnShoot(s){const D=R*.7,{c,dir,ww}=spawnPath(D,1.1);s.c=c;s.dir=dir;s.span=ww*rnd(.25,.45);s.len=ww*rnd(.06,.11);s.dur=rnd(.55,1.1);s.life=0;s.r.visible=true}
  const head=new THREE.Vector3();
  function update(dt,t){G.position.copy(camera.position);starM.uniforms.t.value=t;veilM.uniforms.t.value=rm?0:t;if(rm)return;
-  for(const cm of comets){if(cm.life<0){cm.next-=dt;if(cm.next<=0)spawnComet(cm);continue}cm.life+=dt;const k=cm.life/cm.dur;if(k>=1){cm.life=-1;cm.next=rnd(mob?18:10,mob?32:20);[cm.head,cm.dust,cm.ion].forEach(m=>m.visible=false);continue}
-   const fade=Math.sin(Math.PI*Math.min(1,k))**.6;head.copy(cm.c).addScaledVector(cm.dir,(k-.5)*cm.span);cm.head.position.copy(head);cm.head.lookAt(0,0,0);cm.head.material.uniforms.op.value=fade*1.3;
-   layRibbon(cm.dust,head,cm.dir,cm.len,cm.wid,cm.curve);cm.dust.material.uniforms.op.value=fade*.6;layRibbon(cm.ion,head,cm.dir,cm.len*1.25,cm.wid*.3,null);cm.ion.material.uniforms.op.value=fade*.5}
-  for(const s of shoots){if(s.life<0){s.next-=dt;if(s.next<=0)spawnShoot(s);continue}s.life+=dt;const k=s.life/s.dur;if(k>=1){s.life=-1;s.next=rnd(mob?20:9,mob?40:22);s.r.visible=false;continue}
-   head.copy(s.c).addScaledVector(s.dir,(k-.5)*s.span);layRibbon(s.r,head,s.dir,s.len*Math.min(1,k*3),s.len*.012,null);s.r.material.uniforms.op.value=Math.sin(Math.PI*k)*.9}}
- return{update,group:G,comets,_force:(k=.5)=>{comets.slice(0,1).forEach(c=>{spawnComet(c);c.life=c.dur*k});shoots.slice(0,1).forEach(s=>{spawnShoot(s);s.life=s.dur*.45})}};
+  for(const cm of comets){if(cm.life<0){cm.next-=dt;if(cm.next<=0)spawnComet(cm);continue}cm.life+=dt;const k=cm.life/cm.dur;if(k>=1){cm.life=-1;cm.next=rnd(mob?45:28,mob?90:55);[cm.head,cm.dust,cm.ion].forEach(m=>m.visible=false);continue}
+   const fade=Math.sin(Math.PI*Math.min(1,k))**.6;head.copy(cm.c).addScaledVector(cm.dir,(k-.5)*cm.span);cm.head.position.copy(head);cm.head.lookAt(0,0,0);cm.head.material.uniforms.op.value=fade*.85;
+   layRibbon(cm.dust,head,cm.dir,cm.len,cm.wid,cm.curve);cm.dust.material.uniforms.op.value=fade*.32;layRibbon(cm.ion,head,cm.dir,cm.len*1.35,cm.wid*.12,null);cm.ion.material.uniforms.op.value=fade*.22}
+  for(const s of shoots){if(s.life<0){s.next-=dt;if(s.next<=0)spawnShoot(s);continue}s.life+=dt;const k=s.life/s.dur;if(k>=1){s.life=-1;s.next=rnd(mob?30:16,mob?60:34);s.r.visible=false;continue}
+   head.copy(s.c).addScaledVector(s.dir,(k-.5)*s.span);layRibbon(s.r,head,s.dir,s.len*Math.min(1,k*3),s.len*.012,null);s.r.material.uniforms.op.value=Math.sin(Math.PI*k)*.6}}
+ return{update,group:G,comets,_scr:()=>comets.filter(c=>c.life>=0).map(c=>{const v=c.head.getWorldPosition(new THREE.Vector3()).project(camera);return[(v.x+1)/2*innerWidth,(1-v.y)/2*innerHeight]}),_force:(k=.5)=>{comets.slice(0,1).forEach(c=>{spawnComet(c);c.life=c.dur*k});shoots.slice(0,1).forEach(s=>{spawnShoot(s);s.life=s.dur*.45})}};
 }
