@@ -9,8 +9,9 @@ S.server.listen(0,async()=>{B='http://localhost:'+S.server.address().port;let n=
  try{const A=kp();const sa=await sign(A);let v=await j('/api/x/verify',{wallet:A.w,token:sa.token,handle:'@Alice'});assert.equal(v.b.status,'review');ok('verify queues a review in manual mode');
   assert.equal((await j('/api/admin/claims?status=pending')).s,403);ok('admin list needs key');
   let L=(await j('/api/admin/claims?status=pending',undefined,'k')).b.claims;assert.equal(L.length,1);assert.equal(L[0].handle,'@alice');assert.equal(L[0].code,sa.replyCode);assert.equal(L[0].wallet,A.w);ok('pending list has handle, wallet, code, created_at');
-  const A2=kp();const s2=await sign(A2);const d=await j('/api/x/verify',{wallet:A2.w,token:s2.token,handle:'alice'});assert.equal(d.s,409);ok('same handle cannot queue twice');
+  const A2=kp();const s2=await sign(A2);const d=await j('/api/x/verify',{wallet:A2.w,token:s2.token,handle:'alice'});assert.equal(d.s,200);ok('same handle can queue from a second wallet (no squatting)');
   let r=await j('/api/admin/claims/'+encodeURIComponent(L[0].id)+'/approve',{x_user_id:'111',account_age_days:400,followers:50},'k');assert.equal(r.s,200);assert.equal(r.b.status,'reserved');ok('approve reserves the planet');
+  {const me2=(await j('/api/me?wallet='+A2.w)).b;assert.equal(me2.status,'rejected');ok('other wallets queued with the same handle are rejected on approve');}
   r=await j('/api/admin/claims/'+encodeURIComponent(L[0].id)+'/approve',{},'k');assert.equal(r.s,409);ok('approve is idempotent');
   const Bk=kp();const sb=await sign(Bk,r.b?((await j('/api/me?wallet='+A.w)).b.code):'');await j('/api/x/verify',{wallet:Bk.w,token:sb.token,handle:'bob'});
   L=(await j('/api/admin/claims?status=pending',undefined,'k')).b.claims;const rb=L.find(x=>x.handle==='@bob');assert(rb.invited_by===A.w);

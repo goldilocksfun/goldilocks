@@ -160,6 +160,7 @@ async function gameRoute(req,res,u,p,ip){
 const X=require('./lib/xverify');
 // manual: X tasks are reviewed by a person (or bot) through the admin endpoints; auto: checked with the X API.
 const VERIFY_MODE=process.env.CLAIM_VERIFY==='auto'?'auto':'manual';
+const REVIEW_CAP=+process.env.REVIEW_CAP||2000,REVIEW_PER_IP=+process.env.REVIEW_PER_IP||3;
 db.reviews=db.reviews||{};db.xhandles=db.xhandles||{};
 function reserve(wallet,x,t,ip,refOverride){if(db.claims[wallet])return{ok:true};if(MAX&&db.seq+activeHolds()>=MAX)return{error:'All planets for this season are claimed or reserved.'};
   const pc=db.pending[wallet]||{};const ref=String(refOverride||pc.ref||'').toUpperCase();const code=newCode();const rw=db.codes[ref];const by=rw&&rw!==wallet&&db.claims[rw]?rw:null;if(by)db.claims[by].invites=(db.claims[by].invites||0)+1;
@@ -173,8 +174,13 @@ async function claimRoute(req,res,u,p,ip){
     const tid=tweetId();if((REQ.repost||REQ.like||REQ.reply)&&!tid)return send(req,res,409,{error:'Claim opens when the announcement post is live.'});
     const hl=h.toLowerCase();const owner=db.xhandles[hl];if(owner&&owner!==wallet)return send(req,res,409,{error:'This X account already holds a planet.'});
     if(db.claims[wallet])return send(req,res,200,Object.assign(view(wallet),{ready:true}));
-    if(VERIFY_MODE==='manual'){const taken=Object.values(db.reviews).find(r=>r.status==='pending'&&r.handle===hl&&r.wallet!==wallet);if(taken)return send(req,res,409,{error:'This X account is already waiting for review.'});
-      db.reviews[pc.replyCode]={id:pc.replyCode,wallet,handle:hl,xId:null,code:pc.replyCode,ref:pc.ref||'',status:'pending',created_at:new Date().toISOString()};pc.x='@'+h;save();
+    if(VERIFY_MODE==='manual'){
+      // Several wallets may queue the same handle (so nobody can squat a handle); the reviewer approves the one whose code is in the reply and the rest are rejected automatically.
+      const iph=crypto.createHash('sha256').update(String(ip)+DOMAIN).digest('hex').slice(0,12);const pend=Object.values(db.reviews).filter(r=>r.status==='pending');
+      if(!db.reviews[pc.replyCode]||db.reviews[pc.replyCode].status!=='pending'){if(pend.length>=REVIEW_CAP)return send(req,res,503,{error:'The review queue is full right now. Try again later.'});
+        if(pend.filter(r=>r.ip===iph).length>=REVIEW_PER_IP)return send(req,res,429,{error:'Too many claims waiting for review from this network.'});
+        if(pend.filter(r=>r.handle===hl).length>=5)return send(req,res,409,{error:'This X account already has several claims waiting for review.'});}
+      db.reviews[pc.replyCode]={id:pc.replyCode,wallet,handle:hl,xId:null,code:pc.replyCode,ref:pc.ref||'',status:'pending',ip:iph,created_at:new Date().toISOString()};pc.x='@'+h;save();
       return send(req,res,200,Object.assign(view(wallet),{ready:false,review:true}));}
     let usr;try{usr=await X.userByHandle(h);}catch(e){return send(req,res,e.code===404?404:503,{error:e.code===404?'That X account was not found.':'X checks are unavailable right now. Try again shortly.'});}
     const owner2=db.xids[usr.id];if(owner2&&owner2!==wallet)return send(req,res,409,{error:'This X account already holds a planet.'});
@@ -197,8 +203,14 @@ async function claimRoute(req,res,u,p,ip){
       const owner=db.xhandles[r.handle];if(owner&&owner!==r.wallet)return send(req,res,409,{error:'X account already holds a planet.'});
       const x={id:b.x_user_id?String(b.x_user_id):'h:'+r.handle,username:r.handle,ageDays:b.account_age_days!=null?+b.account_age_days:0,followers:b.followers!=null?+b.followers:0};
       const pc=db.pending[r.wallet]||{ref:r.ref};const res2=reserve(r.wallet,x,{follow:true,repost:true,like:true,reply:true,manual:true},ip,pc.ref||r.ref);if(res2.error)return send(req,res,410,{error:res2.error});
-      r.status='approved';r.xId=x.id;r.reviewed_at=new Date().toISOString();save();return send(req,res,200,Object.assign({review:r},view(r.wallet)));}}
+      r.status='approved';r.xId=x.id;r.reviewed_at=new Date().toISOString();
+      for(const o of Object.values(db.reviews))if(o!==r&&o.status==='pending'&&o.handle===r.handle){o.status='rejected';o.reason='This X account was approved for another wallet.';o.reviewed_at=r.reviewed_at;}save();return send(req,res,200,Object.assign({review:r},view(r.wallet)));}}
 
+  if(p==='/api/admin/purge'&&req.method==='POST'){if(!isAdmin(req))return send(req,res,403,{error:'Forbidden.'});const b=await body(req);const ws=Array.isArray(b.wallets)?b.wallets.filter(isWallet).slice(0,1000):[];let n=0;
+    // Removes test wallets entirely: reviews, pending, reservations (never final planets that already earned, unless force).
+    for(const w of ws){for(const [k,r] of Object.entries(db.reviews))if(r.wallet===w){delete db.reviews[k];n++;}delete db.pending[w];const c=db.claims[w];
+      if(c&&(c.status==='reserved'||b.force)){if(c.code)delete db.codes[c.code];if(c.xId&&db.xids[c.xId]===w)delete db.xids[c.xId];if(c.xHandle&&db.xhandles[c.xHandle]===w)delete db.xhandles[c.xHandle];delete db.claims[w];n++;}}
+    save();return send(req,res,200,{removed:n});}
   if(p==='/api/admin/claimcfg'&&req.method==='POST'){if(!isAdmin(req))return send(req,res,403,{error:'Forbidden.'});const b=await body(req);db.cfg=db.cfg||{};if(b.tweetId!==undefined){if(b.tweetId&&!/^\d{5,25}$/.test(b.tweetId))return send(req,res,400,{error:'bad id'});db.cfg.tweetId=b.tweetId||'';}save();return send(req,res,200,{tweetId:tweetId()});}
   return false;}
 module.exports={server,message,verify,db,E,X,REQ};
