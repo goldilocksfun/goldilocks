@@ -153,8 +153,8 @@ const cloudMat=new THREE.ShaderMaterial({uniforms:{t:{value:0},u:{value:0}},tran
 fragmentShader:NOISE+`uniform float t,u;varying vec3 vP,vN,vW;void main(){vec3 p=normalize(vP);vec3 q=p*3.2;q+=vec3(fbm3(p*2.+t*.015),fbm3(p*2.+5.2-t*.012),0.)*.6;q.x+=t*.02*(1.-abs(p.y));float n=fbm(q);n+=snoise(p*14.+t*.03)*.08;float a=smoothstep(.05,.45,n)*u;vec3 L=normalize(-vW);float d=smoothstep(-.1,.4,dot(normalize(vN),L));gl_FragColor=vec4(vec3(.9)*(d*.9+.02),a*(.15+d*.6));}`});
 const clouds=new THREE.Mesh(new THREE.SphereGeometry(1.015,96,96),cloudMat);you.add(clouds);
 const atmMat=new THREE.ShaderMaterial({uniforms:{u:{value:0},c:{value:new THREE.Color(0x4f9dff)}},transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.BackSide,vertexShader:planetVS,
-fragmentShader:`uniform float u;uniform vec3 c;varying vec3 vP,vN,vW;void main(){vec3 V=normalize(cameraPosition-vW);vec3 N=normalize(vN);float f=pow(clamp(1.+dot(N,V)*1.0,0.,1.),.0);float rim=pow(1.-abs(dot(N,V)),1.5);float edge=smoothstep(0.,.35,abs(dot(N,V)));vec3 L=normalize(-vW);float d=smoothstep(-.4,.5,dot(N,L));gl_FragColor=vec4(c*rim*edge*d*u*2.2,1.);}`});
-const atm=new THREE.Mesh(new THREE.SphereGeometry(1.09,96,96),atmMat);you.add(atm);
+fragmentShader:`uniform float u;uniform vec3 c;varying vec3 vP,vN,vW;void main(){vec3 V=normalize(cameraPosition-vW);vec3 N=normalize(vN);float f=pow(clamp(1.+dot(N,V)*1.0,0.,1.),.0);float rim=pow(1.-abs(dot(N,V)),1.5);float edge=smoothstep(0.,.35,abs(dot(N,V)));vec3 L=normalize(-vW);float d=mix(.18,1.,smoothstep(-.4,.5,dot(N,L)));gl_FragColor=vec4(c*rim*edge*d*u*1.8,1.);}`});
+const atm=new THREE.Mesh(new THREE.SphereGeometry(1.035,96,96),atmMat);you.add(atm);
 const aurMat=new THREE.ShaderMaterial({uniforms:{t:{value:0},u:{value:0}},transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,vertexShader:planetVS,
 fragmentShader:NOISE+`uniform float t,u;varying vec3 vP,vN,vW;void main(){vec3 p=normalize(vP);float lat=abs(p.y);float band=smoothstep(.72,.8,lat)*smoothstep(.95,.85,lat);float lon=atan(p.z,p.x);float cur=pow(.5+.5*snoise(vec3(lon*3.,t*.4,p.y*4.)),2.);vec3 L=normalize(-vW);float night=1.-smoothstep(-.3,.2,dot(normalize(vN),L));vec3 c=mix(vec3(.2,1.,.5),vec3(.6,.3,1.),smoothstep(.8,.92,lat));gl_FragColor=vec4(c*band*cur*u*(.25+night)*1.6,1.);}`});
 const aurora=new THREE.Mesh(new THREE.SphereGeometry(1.05,96,64),aurMat);you.add(aurora);
@@ -210,11 +210,11 @@ const R={au:$('#r-au'),k:$('#r-k'),esi:$('#r-esi'),life:$('#r-life'),zone:$('#r-
 const sky=createSky(scene,cam,{mobile:MOB,rm:RM,dpr:DPR});window.__sky=sky;let SB=0,SBh=0;const storyB=()=>{if(!SB||SBh!==document.documentElement.scrollHeight){SBh=document.documentElement.scrollHeight;SB=story.offsetTop+story.offsetHeight}return SB};addEventListener('resize',()=>{SB=0},{passive:true});let firstFrame=true;const clock=new THREE.Clock();const story=$('#story');
 const perf={n:0,sum:0,low:false};window.__perf=perf;
 function frame(){requestAnimationFrame(frame);if(document.hidden)return;const f0=performance.now();const rdt=clock.getDelta(),dt=Math.min(rdt,.05),t=clock.elapsedTime;sky.update(dt,t);
- P=RM?st.p:lerp(P,st.p,1-Math.exp(-Math.min(rdt,.3)*4.5));if(Math.abs(P-st.p)<1e-4)P=st.p;
+ P=st.p;
  const sb=storyB()-scrollY;const vis=sb>innerHeight*.92;const ex=cl((sb/innerHeight-.6)/.32);if(ex!==frame.ex){frame.ex=ex;const ev=String(Math.round(ex*1000)/1000);story.style.opacity=ev;['.crops','.lbx','.grid-ov'].forEach(q=>{const e=document.querySelector(q);if(e)e.style.opacity=ev});story.style.visibility=ex<=0?'hidden':'visible'}canvas.style.opacity=cl(sb/innerHeight*1.4-.2);document.body.classList.toggle('solid',sb<innerHeight*.6);document.querySelector('.hud').style.opacity=cl(sb/innerHeight*2-.5);
  // panels
- panels.forEach(o=>{const on=vis&&P>=o.a&&P<o.b;if(on&&o.state!==1){o.el.classList.add('on','in');o.el.classList.remove('out');o.state=1}else if(!on&&o.state===1){o.el.classList.add('out');o.el.classList.remove('in');o.state=2;setTimeout(()=>{if(o.state===2)o.el.classList.remove('on')},700)}});
- let ci=0;bounds.forEach((b,i)=>{if(P>=b)ci=i});if(ci!==frame.ci){frame.ci=ci;const cn=$('#chapname');cn.classList.add('swap');setTimeout(()=>{cn.textContent=names[ci];$('#chap').textContent='0'+ci;cn.classList.remove('swap')},220)}$('#prog').style.width=P*100+'%';
+ panels.forEach(o=>{const on=vis&&P>=o.a&&P<o.b;if(on&&o.state!==1){o.el.classList.add('snap');o.el.classList.remove('out','in');void o.el.offsetWidth;o.el.classList.remove('snap');o.el.classList.add('on','in');o.state=1}else if(!on&&o.state===1){o.el.classList.add('out');o.el.classList.remove('in');o.state=2;setTimeout(()=>{if(o.state===2)o.el.classList.remove('on')},700)}});
+ let ci=0;bounds.forEach((b,i)=>{if(P>=b)ci=i});if(ci!==frame.ci){frame.ci=ci;const cn=$('#chapname');cn.classList.add('swap');setTimeout(()=>{cn.textContent=names[frame.ci];$('#chap').textContent='0'+frame.ci;cn.classList.remove('swap')},220)}$('#prog').style.width=P*100+'%';
  if(!vis&&!firstFrame){return}
  // collapse
  const c=seg(P,.03,.27);dustMat.uniforms.c.value=c;puffMat.uniforms.c.value=eio(c);
@@ -354,6 +354,7 @@ function cardsLoop(now){requestAnimationFrame(cardsLoop);const d=Math.min((now-c
   const s=o.cv.width/300;o.ctx.font=`${8.5*s}px JB, monospace`;o.ctx.fillStyle='rgba(245,201,122,.85)';o.ctx.fillText(o.sc.label||'',16*s,o.cv.height-16*s);
   o.ctx.strokeStyle='rgba(255,255,255,.3)';o.ctx.lineWidth=s*.8;[[10,10,1,1],[290,10,-1,1],[10,290,1,-1],[290,290,-1,-1]].forEach(([x,y,a,b])=>{o.ctx.beginPath();o.ctx.moveTo(x*s,(y+b*8)*s);o.ctx.lineTo(x*s,y*s);o.ctx.lineTo((x+a*8)*s,y*s);o.ctx.stroke()})})}
 requestAnimationFrame(cardsLoop);
+{const warm=()=>{let i=0;const step=()=>{const o=cardViews[i++];if(!o)return;try{CR.compile(o.sc.s,o.sc.c);CR.render(o.sc.s,o.sc.c)}catch(e){}(window.requestIdleCallback||setTimeout)(step,{timeout:600})};step()};addEventListener('load',()=>setTimeout(warm,1500),{once:true})}
 
 /* ---------- sprite bodies for the live sim ---------- */
 const SPR={planets:[],star:document.createElement('canvas')};

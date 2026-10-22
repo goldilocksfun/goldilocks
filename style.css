@@ -219,3 +219,7 @@ body{text-rendering:optimizeLegibility;-moz-osx-font-smoothing:grayscale}
 .claimcta.in .c{transform:none}
 .soc{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,.1);color:var(--dim);transition:color .3s,border-color .3s,background .3s}.soc svg{width:15px;height:15px;fill:currentColor}.soc:hover{color:var(--gold);border-color:rgba(245,201,122,.45);background:rgba(245,201,122,.06)}
 footer .links{display:flex;gap:10px}
+
+.lbx{display:none!important}
+.w{padding:0 .1em .24em;margin:0 -.1em -.24em}
+.panel.snap .c,.panel.snap .kicker,.panel.snap .sub,.panel.snap .meters{transition:none!important}
