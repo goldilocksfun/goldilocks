@@ -11,11 +11,14 @@ function legacy(){const L=[['Phantom',window.phantom&&window.phantom.solana],['S
   for(const [n,p] of L)if(p&&p.connect&&p.signMessage&&!has(n))found.set(n,{name:n,legacy:p});
   const g=window.solana;if(g&&g.connect&&g.signMessage&&![...found.values()].some(v=>v.legacy===g)){const n=g.isPhantom?'Phantom':g.isSolflare?'Solflare':g.isBackpack?'Backpack':g.isGlow?'Glow':g.isExodus?'Exodus':'Solana wallet';if(!has(n))found.set(n,{name:n,legacy:g});}}
 function adapter(e){if(e.legacy){const p=e.legacy;return{name:e.name,async connect(){const r=await p.connect();const pk=(r&&r.publicKey)||p.publicKey;this.address=pk.toString();return this.address;},
-    async signMessage(m){const r=await p.signMessage(m,'utf8');return r.signature||r;},async disconnect(){try{await p.disconnect();}catch(x){}}};}
+    async signMessage(m){const r=await p.signMessage(m,'utf8');return r.signature||r;},
+    async signAndSend(tx,chain){const r=await p.signAndSendTransaction(tx);return r.signature||r;},async disconnect(){try{await p.disconnect();}catch(x){}}};}
   const w=e.std,f=w.features;let acct=null;
   return{name:e.name,async connect(){const r=await f['standard:connect'].connect();acct=(r.accounts||w.accounts||[]).find(a=>(a.chains||[]).some(c=>String(c).startsWith('solana:')))||(r.accounts||w.accounts)[0];if(!acct)throw new Error('No Solana account in this wallet.');this.address=acct.address;return acct.address;},
     async signMessage(m){const [o]=await f['solana:signMessage'].signMessage({account:acct,message:m});return o.signature;},
+    async signAndSend(tx,chain){const ft=f['solana:signAndSendTransaction'];if(!ft)throw new Error('This wallet cannot send transactions here.');const [o]=await ft.signAndSendTransaction({account:acct,chain:'solana:'+(chain||'devnet'),transaction:tx.serialize({requireAllSignatures:false,verifySignatures:false})});return b58(o.signature);},
     async disconnect(){const d=f['standard:disconnect'];if(d)try{await d.disconnect();}catch(x){}}};}
+const b58=b=>{const A='123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';let d=[0];for(const x of b){let c=x;for(let j=0;j<d.length;j++){c+=d[j]<<8;d[j]=c%58;c=c/58|0;}while(c){d.push(c%58);c=c/58|0;}}let s='';for(const x of b){if(x)break;s+='1';}for(let i=d.length-1;i>=0;i--)s+=A[d[i]];return s;};
 const here=()=>location.href.split('#')[0],enc=encodeURIComponent;
 const KNOWN=[{name:'Phantom',icon:'wallets/phantom.svg',site:'https://phantom.app/download',deep:()=>'https://phantom.app/ul/browse/'+enc(here())+'?ref='+enc(location.origin)},
  {name:'Solflare',icon:'wallets/solflare.svg',site:'https://solflare.com/download',deep:()=>'https://solflare.com/ul/v1/browse/'+enc(here())+'?ref='+enc(location.origin)},

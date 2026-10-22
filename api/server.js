@@ -85,9 +85,11 @@ const GCFG={mint:process.env.TOKEN_MINT||'',snapMs:+process.env.SNAPSHOT_MS||600
 if(GCFG.payoutMode==='live'&&!GCFG.mainnet)GCFG.payoutMode='dry';
 const treasury=chain?chain.loadOrCreateKeypair(process.env.TREASURY_FILE||path.join(path.dirname(DATA),GCFG.cluster+'-treasury.json')):null;
 const burnNonces=new Map();
-async function doSnapshot(){if(!chain||!GCFG.mint)return null;const [bal,sup]=await Promise.all([chain.holders(GCFG.mint),chain.supply(GCFG.mint)]);E.snapshot(bal,sup);return{holders:Object.keys(bal).length,supply:sup};}
+// Wallets that never get a planet: treasury, deployer, bonding curve, pool and team vaults.
+const EXCL=new Set(String(process.env.EXCLUDE_WALLETS||'').split(',').map(s=>s.trim()).filter(Boolean).concat(treasury?[treasury.publicKey.toBase58()]:[]));
+async function doSnapshot(){if(!chain||!GCFG.mint)return null;const [bal,sup]=await Promise.all([chain.holders(GCFG.mint),chain.supply(GCFG.mint)]);for(const x of EXCL)delete bal[x];E.snapshot(bal,sup);return{holders:Object.keys(bal).length,supply:sup};}
 async function doEpoch(idx,pool){const r=E.closeEpoch(idx,pool!=null?pool:GCFG.feePool);if(r.already)return r;
-  const mode=GCFG.payoutMode==='devnet'&&GCFG.cluster==='devnet'?'devnet':'dry';await E.execute(r.epoch,mode,(w,l)=>chain.transfer(treasury,w,l));return r;}
+  const mode=GCFG.payoutMode==='devnet'&&GCFG.cluster!=='mainnet-beta'?'devnet':'dry';await E.execute(r.epoch,mode,(w,l)=>chain.transfer(treasury,w,l));return r;}
 if(require.main===module){setInterval(()=>{try{E.advance();}catch(e){console.error('tick',e.message);}},Math.min(10e3,E.C.TICK_MS/2)).unref();
   if(GCFG.mint){const f=()=>doSnapshot().catch(e=>console.error('snap',e.message));f();setInterval(f,GCFG.snapMs).unref();}
   if(E.S.genesisEpoch==null){E.S.genesisEpoch=G.epochIndex(Date.now(),E.C);save();}
@@ -96,7 +98,7 @@ if(require.main===module){setInterval(()=>{try{E.advance();}catch(e){console.err
 const isAdmin=req=>GCFG.admin&&req.headers['x-admin-key']===GCFG.admin;
 const burnMsg=(w,dir,n)=>`goldilocks burn ${dir} ${w} ${n}`;
 async function gameRoute(req,res,u,p,ip){
-  if(p==='/api/game'&&req.method==='GET')return send(req,res,200,{cluster:GCFG.cluster,mainnet:GCFG.mainnet,mint:GCFG.mint||null,treasury:treasury?treasury.publicKey.toBase58():null,payoutMode:GCFG.payoutMode,tick:E.S.tick,tickMs:E.C.TICK_MS,epochMs:E.C.EPOCH_MS,epochAnchor:E.C.EPOCH_ANCHOR_MS,hz:[E.C.HZ_IN,E.C.HZ_OUT],thrustLamports:E.C.THRUST_LAMPORTS,thrustStep:E.C.THRUST_STEP,split:[E.C.SPLIT_HZ,E.C.SPLIT_JACKPOT,E.C.SPLIT_OPS],minPayout:E.C.MIN_PAYOUT_LAMPORTS,minHoldMs:E.C.MIN_HOLD_MS,stages:E.C.STAGES,jackpot:E.S.jackpot,burnPool:E.S.burnPool,feePool:GCFG.feePool,planets:Object.keys(E.S.planets).length,lifeWinner:E.S.lifeWinner,lastSnapshot:E.S.lastSnap});
+  if(p==='/api/game'&&req.method==='GET')return send(req,res,200,{cluster:GCFG.cluster,mainnet:GCFG.mainnet,mint:GCFG.mint||null,treasury:treasury?treasury.publicKey.toBase58():null,payoutMode:GCFG.payoutMode,tick:E.S.tick,tickMs:E.C.TICK_MS,epochMs:E.C.EPOCH_MS,epochAnchor:E.C.EPOCH_ANCHOR_MS,hz:[E.C.HZ_IN,E.C.HZ_OUT],clientRpc:process.env.CLIENT_RPC||(GCFG.cluster==='mainnet-beta'?null:'https://api.devnet.solana.com'),memoProgram:chain?chain.MEMO.toBase58():null,thrustLamports:E.C.THRUST_LAMPORTS,thrustStep:E.C.THRUST_STEP,split:[E.C.SPLIT_HZ,E.C.SPLIT_JACKPOT,E.C.SPLIT_OPS],minPayout:E.C.MIN_PAYOUT_LAMPORTS,minHoldMs:E.C.MIN_HOLD_MS,stages:E.C.STAGES,jackpot:E.S.jackpot,burnPool:E.S.burnPool,feePool:GCFG.feePool,planets:Object.keys(E.S.planets).length,lifeWinner:E.S.lifeWinner,lastSnapshot:E.S.lastSnap});
   let m;
   if((m=p.match(/^\/api\/planet\/([^/]+)$/))&&req.method==='GET'){const w=m[1];if(!isWallet(w))return send(req,res,400,{error:'Invalid wallet.'});const pl=E.S.planets[w];if(!pl)return send(req,res,404,{error:'No planet for this wallet yet.',initialAu:+G.initialAu(w).toFixed(5)});return send(req,res,200,E.pub(pl));}
   if((m=p.match(/^\/api\/earnings\/([^/]+)$/))&&req.method==='GET'){if(!isWallet(m[1]))return send(req,res,400,{error:'Invalid wallet.'});return send(req,res,200,E.earnings(m[1]));}
@@ -104,7 +106,7 @@ async function gameRoute(req,res,u,p,ip){
   if(p==='/api/epochs'&&req.method==='GET')return send(req,res,200,{jackpot:E.S.jackpot,epochs:E.S.epochs.slice(-30).reverse().map(e=>({idx:e.idx,closedAt:e.closedAt,pool:e.pool,burn:e.burn,hz:e.hz,jackpotIn:e.jackpotIn,ops:e.ops,totalWeight:e.totalWeight,jackpotAfter:e.jackpotAfter,award:e.award,payouts:e.payouts.map(x=>({wallet:x.wallet,lamports:x.lamports,status:x.status,sig:x.sig})),carry:e.carry}))});
   if(p==='/api/thruster/nonce'&&req.method==='POST'){if(limited(ip,'tn',30,600e3))return send(req,res,429,{error:'Too many tries.'});const {wallet,dir}=await body(req);if(!isWallet(wallet)||!['in','out'].includes(dir))return send(req,res,400,{error:'Invalid request.'});
     if(!E.S.planets[wallet])return send(req,res,404,{error:'No planet for this wallet yet.'});const n=crypto.randomBytes(8).toString('hex');burnNonces.set(n,{wallet,dir,at:Date.now()});
-    return send(req,res,200,{nonce:n,memo:burnMsg(wallet,dir,n),free:E.canFreeBurn(wallet),lamports:E.C.THRUST_LAMPORTS,treasury:treasury&&treasury.publicKey.toBase58(),cluster:GCFG.cluster});}
+    return send(req,res,200,{nonce:n,memo:burnMsg(wallet,dir,n),free:E.canFreeBurn(wallet),lamports:E.C.THRUST_LAMPORTS,memoProgram:chain?chain.MEMO.toBase58():null,treasury:treasury&&treasury.publicKey.toBase58(),cluster:GCFG.cluster});}
   if(p==='/api/thruster/verify'&&req.method==='POST'){if(limited(ip,'tv',30,600e3))return send(req,res,429,{error:'Too many tries.'});const {wallet,nonce,signature,messageSignature}=await body(req);
     if(signature&&E.S.burnSigs[signature])return send(req,res,200,Object.assign({already:true},E.S.burnSigs[signature]));
     const n=burnNonces.get(nonce);if(!n||n.wallet!==wallet||Date.now()-n.at>NONCE_TTL)return send(req,res,400,{error:'Burn request expired. Try again.'});
@@ -117,10 +119,10 @@ async function gameRoute(req,res,u,p,ip){
     if(p==='/api/admin/snapshot')return send(req,res,200,await doSnapshot()||{skipped:true});
     if(p==='/api/admin/airdrop'){if(GCFG.cluster!=='devnet')return send(req,res,400,{error:'devnet only'});const pub=new chain.web3.Connection(chain.web3.clusterApiUrl('devnet'),'confirmed');
       try{const sig=await pub.requestAirdrop(new chain.web3.PublicKey(b.to||treasury.publicKey.toBase58()),Math.min(+b.lamports||1e9,2e9));return send(req,res,200,{sig});}catch(e){return send(req,res,502,{error:String(e.message).slice(0,200)});}}
-    if(p==='/api/admin/fund'){if(GCFG.cluster!=='devnet')return send(req,res,400,{error:'devnet only'});const sig=await chain.transfer(treasury,b.to,Math.min(+b.lamports,2e9));return send(req,res,200,{sig});}
+    if(p==='/api/admin/fund'){if(GCFG.cluster==='mainnet-beta')return send(req,res,400,{error:'devnet only'});const sig=await chain.transfer(treasury,b.to,Math.min(+b.lamports,2e9));return send(req,res,200,{sig});}
     if(p==='/api/admin/tick'){E.advance();return send(req,res,200,{tick:E.S.tick});}
     if(p==='/api/admin/epoch'){const idx=b.idx!=null?b.idx:(E.S.epochs.length?E.S.epochs[E.S.epochs.length-1].idx+1:0);return send(req,res,200,await doEpoch(idx,b.pool));}
-    if(p==='/api/admin/retry'){const e=E.S.epochs.find(x=>x.idx===b.idx);if(!e)return send(req,res,404,{});await E.execute(e,GCFG.payoutMode==='devnet'?'devnet':'dry',(w,l)=>chain.transfer(treasury,w,l));return send(req,res,200,e);}
+    if(p==='/api/admin/retry'){const e=E.S.epochs.find(x=>x.idx===b.idx);if(!e)return send(req,res,404,{});await E.execute(e,GCFG.payoutMode==='devnet'&&GCFG.cluster!=='mainnet-beta'?'devnet':'dry',(w,l)=>chain.transfer(treasury,w,l));return send(req,res,200,e);}
   }
   return false;}
 module.exports={server,message,verify,db,E};

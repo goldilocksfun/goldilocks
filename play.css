@@ -1,0 +1,43 @@
+/* Play dashboard */
+body.pl{background:#020308;color:var(--ink)}
+.pl .sbtn{opacity:1;pointer-events:auto}.pl .sbtn[disabled]{opacity:.35;pointer-events:none}
+.pl-main{position:relative;z-index:2;max-width:1180px;margin:0 auto;padding:132px 28px 80px}
+.pl-head h1{font-family:Newsreader,serif;font-weight:300;font-size:clamp(44px,6vw,84px);line-height:1;letter-spacing:-.02em;margin:14px 0 18px}
+.pl-head .lede{max-width:560px;color:var(--dim);font-size:16px;line-height:1.6}
+.kick{font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+.pl-acts{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:30px}
+.look{display:flex;border:1px solid var(--line);border-radius:40px;overflow:hidden}
+.look input{background:transparent;border:0;color:var(--ink);padding:11px 16px;font-size:12px;width:min(360px,62vw);outline:none}
+.lbtn{background:transparent;border:0;border-left:1px solid var(--line);color:var(--gold);padding:0 16px;font-size:11px;letter-spacing:.08em;min-height:40px}
+.pl-grid{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;margin-top:56px}
+.pl-grid .big{grid-row:span 2}
+.card{border:1px solid var(--line);border-radius:4px;padding:26px 26px 24px;background:rgba(8,9,14,.6)}
+.card>p.mono{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase}
+.card h2{font-family:Newsreader,serif;font-weight:300;font-size:40px;margin:8px 0 4px}
+.card h3{font-family:Newsreader,serif;font-weight:300;font-size:28px;margin:8px 0 10px}
+.small{font-size:12.5px;line-height:1.6}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:22px 18px;margin:26px 0 0}
+.stats.two{grid-template-columns:repeat(2,1fr)}.stats.four{grid-template-columns:repeat(4,1fr)}
+.stats dt{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.stats dd{margin:6px 0 0;font-size:17px;font-variant-numeric:tabular-nums}
+.zone{margin-top:30px}.zbar{position:relative;height:6px;border-radius:6px;background:linear-gradient(90deg,rgba(255,140,90,.35),rgba(255,255,255,.06) 40%,rgba(255,255,255,.06) 60%,rgba(140,180,255,.3))}
+.zhz{position:absolute;top:-3px;bottom:-3px;border:1px solid rgba(212,173,102,.6);background:rgba(212,173,102,.14);border-radius:3px}
+.zdot{position:absolute;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:var(--ink);box-shadow:0 0 14px rgba(235,229,216,.7);transition:left .8s var(--ease)}
+.zl{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.1em;text-transform:uppercase;margin-top:10px}
+.hab{color:var(--gold)}.hot{color:#ff9a7a}.cold{color:#9fc0ff}
+.tb{display:flex;gap:10px;margin:18px 0 10px;flex-wrap:wrap}
+.hist{list-style:none;padding:0;margin:16px 0 0;font-size:11px;color:var(--dim);max-height:170px;overflow:auto}
+.hist li{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--line)}
+.hist a,.tbl a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--rule)}
+.pl-sec{margin-top:84px}.sh{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;margin-bottom:22px;border-bottom:1px solid var(--rule);padding-bottom:16px}
+.sh h2{font-family:Newsreader,serif;font-weight:300;font-size:36px;margin:0}.sh .stats{margin:0;flex:1;max-width:760px}
+.tw{overflow-x:auto}.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{text-align:left;font-weight:400;color:var(--dim);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:0 12px 12px 0}
+.tbl td{padding:12px 12px 12px 0;border-top:1px solid var(--line);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tbl tr.mine td{color:var(--gold)}
+.ep{border-top:1px solid var(--line);padding:18px 0}.ep summary{cursor:pointer;display:flex;gap:26px;flex-wrap:wrap;font-size:12px;list-style:none}.ep summary::-webkit-details-marker{display:none}
+.ep .tbl{margin-top:14px}
+.chip.net{color:#9fc0ff;border-color:rgba(159,192,255,.3)}.chip.net i{background:#9fc0ff;box-shadow:0 0 10px #9fc0ff}
+.empty{color:var(--dim);font-size:13px;padding:18px 0}
+@media (max-width:900px){.pl-grid{grid-template-columns:1fr}.stats,.stats.four{grid-template-columns:repeat(2,1fr)}.pl-main{padding:110px 18px 60px}}
+#pWallet{word-break:break-all;font-size:10.5px}
