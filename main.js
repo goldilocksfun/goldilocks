@@ -199,7 +199,7 @@ var lastW=innerWidth,lastH=VH();addEventListener('resize',()=>{const nh=VH();if(
 
 /* ---------- scroll state ---------- */
 const st={p:0};let P=0;
-ScrollTrigger.create({trigger:'#story',start:'top top',end:'bottom bottom',onUpdate:s=>{st.p=s.progress}});
+st.tr=ScrollTrigger.create({trigger:'#story',start:'top top',end:'bottom bottom',onUpdate:s=>{st.p=s.progress}});
 const names=['Nebula','Collapse','Accretion','Habitable zone','Migration','Abiogenesis','First life'],bounds=[0,.11,.24,.38,.51,.64,.87];
 const panels=$$('.panel').map(el=>({el,a:+el.dataset.a,b:+el.dataset.b,state:0}));
 const camPath=new THREE.CatmullRomCurve3([new THREE.Vector3(0,40,170),new THREE.Vector3(-20,28,120),new THREE.Vector3(10,30,88),new THREE.Vector3(0,58,72),new THREE.Vector3(-18,52,42),new THREE.Vector3(16,30,40)],false,'centripetal');
@@ -210,7 +210,7 @@ const R={au:$('#r-au'),k:$('#r-k'),esi:$('#r-esi'),life:$('#r-life'),zone:$('#r-
 const sky=createSky(scene,cam,{mobile:MOB,rm:RM,dpr:DPR});window.__sky=sky;let SB=0,SBh=0;const storyB=()=>{if(!SB||SBh!==document.documentElement.scrollHeight){SBh=document.documentElement.scrollHeight;SB=story.offsetTop+story.offsetHeight}return SB};addEventListener('resize',()=>{SB=0},{passive:true});let firstFrame=true;const clock=new THREE.Clock();const story=$('#story');
 const perf={n:0,sum:0,low:false};window.__perf=perf;
 function frame(){requestAnimationFrame(frame);if(document.hidden)return;const f0=performance.now();const rdt=clock.getDelta(),dt=Math.min(rdt,.05),t=clock.elapsedTime;sky.update(dt,t);
- {const se=document.getElementById('story');const t0=se.offsetTop,t1=t0+se.offsetHeight-innerHeight;P=t1>t0?Math.min(1,Math.max(0,(scrollY-t0)/(t1-t0))):st.p;}
+ {const t0=st.tr.start,t1=st.tr.end;P=t1>t0?Math.min(1,Math.max(0,(scrollY-t0)/(t1-t0))):st.p;}
  const sb=storyB()-scrollY;const vis=sb>innerHeight*.92;const ex=cl((sb/innerHeight-.6)/.32);if(ex!==frame.ex){frame.ex=ex;const ev=String(Math.round(ex*1000)/1000);story.style.opacity=ev;['.crops','.lbx','.grid-ov'].forEach(q=>{const e=document.querySelector(q);if(e)e.style.opacity=ev});story.style.visibility=ex<=0?'hidden':'visible'}canvas.style.opacity=cl(sb/innerHeight*1.4-.2);document.body.classList.toggle('solid',sb<innerHeight*.6);document.querySelector('.hud').style.opacity=cl(sb/innerHeight*2-.5);
  // panels
  panels.forEach(o=>{const on=vis&&P>=o.a&&P<o.b;if(on&&o.state!==1){o.el.classList.add('snap');o.el.classList.remove('out','in');void o.el.offsetWidth;o.el.classList.remove('snap');o.el.classList.add('on','in');o.state=1}else if(!on&&o.state===1){o.el.classList.add('out');o.el.classList.remove('in');o.state=2;setTimeout(()=>{if(o.state===2)o.el.classList.remove('on')},320)}});
