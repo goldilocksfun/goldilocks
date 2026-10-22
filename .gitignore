@@ -5,3 +5,5 @@ brand/
 __pycache__/
 .DS_Store
 *.env
+api/data/
+api/node_modules/

@@ -1,0 +1,30 @@
+// Solana RPC helpers. Devnet by default; mainnet requires MAINNET_ENABLED=1 which is off.
+'use strict';
+const web3=require('@solana/web3.js');const fs=require('fs');
+const CLUSTER=process.env.CLUSTER||'devnet';
+const MAINNET_ENABLED=process.env.MAINNET_ENABLED==='1';
+if(CLUSTER==='mainnet-beta'&&!MAINNET_ENABLED)throw new Error('mainnet is disabled by config');
+const KEY=process.env.HELIUS_API_KEY;
+const RPC=process.env.GAME_RPC_URL||(KEY?`https://${CLUSTER==='mainnet-beta'?'mainnet':'devnet'}.helius-rpc.com/?api-key=${KEY}`:web3.clusterApiUrl(CLUSTER));
+const conn=new web3.Connection(RPC,'confirmed');
+const MEMO=new web3.PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLgmfcHr');
+const TOKEN_PROGRAMS=['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA','TokenzQdBNbLqP5VEhdkAS6EPFLC1PqHrSHqbKbdB7y'];
+function loadOrCreateKeypair(file){try{return web3.Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(file,'utf8'))));}catch(e){const k=web3.Keypair.generate();fs.writeFileSync(file,JSON.stringify([...k.secretKey]),{mode:0o600});return k;}}
+async function supply(mint){const r=await conn.getTokenSupply(new web3.PublicKey(mint));return r.value.amount;}
+// All holders of a mint: {owner: rawAmountString}, summed across token accounts.
+async function holders(mint){const out={};const pk=new web3.PublicKey(mint);
+  for(const prog of TOKEN_PROGRAMS){let accs=[];try{accs=await conn.getParsedProgramAccounts(new web3.PublicKey(prog),{filters:[...(prog===TOKEN_PROGRAMS[0]?[{dataSize:165}]:[]),{memcmp:{offset:0,bytes:pk.toBase58()}}]});}catch(e){if(prog===TOKEN_PROGRAMS[0])throw e;}
+    for(const a of accs){const i=a.account.data.parsed&&a.account.data.parsed.info;if(!i)continue;const amt=BigInt(i.tokenAmount.amount);if(amt>0n)out[i.owner]=String(BigInt(out[i.owner]||0)+amt);}}
+  return out;}
+// Verify a thruster burn: success, fee payer is wallet, SOL transfer of >= lamports to treasury, memo equals expected.
+async function verifyBurn(sig,{wallet,treasury,lamports,memo}){const tx=await conn.getParsedTransaction(sig,{maxSupportedTransactionVersion:0,commitment:'confirmed'});
+  if(!tx)return{ok:false,error:'Transaction not found yet. Try again in a few seconds.'};if(tx.meta&&tx.meta.err)return{ok:false,error:'Transaction failed on chain.'};
+  const keys=tx.transaction.message.accountKeys;const payer=(keys[0].pubkey||keys[0]).toString();if(payer!==wallet)return{ok:false,error:'Transaction was not signed by this wallet.'};
+  let paid=0,memoOk=false;for(const ix of tx.transaction.message.instructions){
+    if(ix.program==='system'&&ix.parsed&&ix.parsed.type==='transfer'&&ix.parsed.info.source===wallet&&ix.parsed.info.destination===treasury)paid+=+ix.parsed.info.lamports;
+    if(ix.programId&&ix.programId.toString()===MEMO.toString()){const m=typeof ix.parsed==='string'?ix.parsed:'';if(m===memo)memoOk=true;}}
+  if(paid<lamports)return{ok:false,error:'Payment to the treasury is missing or too small.'};if(!memoOk)return{ok:false,error:'Memo does not match this burn.'};
+  return{ok:true,paid,slot:tx.slot,blockTime:tx.blockTime};}
+async function transfer(from,to,lamports){const tx=new web3.Transaction().add(web3.SystemProgram.transfer({fromPubkey:from.publicKey,toPubkey:new web3.PublicKey(to),lamports}));
+  return web3.sendAndConfirmTransaction(conn,tx,[from],{commitment:'confirmed'});}
+module.exports={web3,conn,CLUSTER,MAINNET_ENABLED,MEMO,loadOrCreateKeypair,supply,holders,verifyBurn,transfer,balance:pk=>conn.getBalance(new web3.PublicKey(pk))};
