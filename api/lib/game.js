@@ -18,6 +18,7 @@ function config(){return{
   MIN_HOLD_MS:num('MIN_HOLD_MS',24*3600e3),
   STAGES:(process.env.STAGES||'Barren:0,Prebiotic:12,Microbial:48,Multicellular:120,Complex:240,Life:400').split(',').map(x=>{const [n,h]=x.split(':');return{name:n,hours:+h}}),
   SPLIT_HZ:num('SPLIT_HZ',.7),SPLIT_JACKPOT:num('SPLIT_JACKPOT',.2),SPLIT_OPS:num('SPLIT_OPS',.1),
+  PAYOUT_BATCH:num('PAYOUT_BATCH',10),          // transfers per payout transaction
   MIN_PAYOUT_LAMPORTS:num('MIN_PAYOUT_LAMPORTS',2e6),
   EPOCH_MS:num('EPOCH_MS',24*3600e3),
   EPOCH_ANCHOR_MS:num('EPOCH_ANCHOR_MS',Date.UTC(2026,0,1,12,0,0)), // 20:00 Asia/Taipei

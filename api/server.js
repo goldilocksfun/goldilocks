@@ -101,11 +101,14 @@ const GCFG={mint:process.env.TOKEN_MINT||'',snapMs:+process.env.SNAPSHOT_MS||600
 if(GCFG.payoutMode==='live'&&!GCFG.mainnet)GCFG.payoutMode='dry';
 const treasury=chain?chain.loadOrCreateKeypair(process.env.TREASURY_FILE||path.join(path.dirname(DATA),GCFG.cluster+'-treasury.json')):null;
 const burnNonces=new Map();
+// Append-only payout ledger next to the state file: one JSON line per confirmed payout. Survives state resets; the chain is the final record.
+const LEDGER=process.env.LEDGER_FILE||path.join(path.dirname(DATA),'ledger.jsonl');
+const ledgerAppend=(p,e)=>fs.appendFileSync(LEDGER,JSON.stringify({epoch:e.idx,closedAt:e.closedAt,wallet:p.wallet,lamports:p.lamports,sig:p.sig,batch:p.batch||1,cluster:GCFG.cluster,at:Date.now()})+'\n');
 // Wallets that never get a planet: treasury, deployer, bonding curve, pool and team vaults.
 const EXCL=new Set(String(process.env.EXCLUDE_WALLETS||'').split(',').map(s=>s.trim()).filter(Boolean).concat(treasury?[treasury.publicKey.toBase58()]:[]));
 async function doSnapshot(){if(!chain||!GCFG.mint)return null;const [bal,sup]=await Promise.all([chain.holders(GCFG.mint),chain.supply(GCFG.mint)]);for(const x of EXCL)delete bal[x];E.snapshot(bal,sup);return{holders:Object.keys(bal).length,supply:sup};}
 async function doEpoch(idx,pool){const r=E.closeEpoch(idx,pool!=null?pool:GCFG.feePool);if(r.already)return r;
-  const mode=GCFG.payoutMode==='devnet'&&GCFG.cluster!=='mainnet-beta'?'devnet':'dry';await E.execute(r.epoch,mode,(w,l,onSig)=>chain.transfer(treasury,w,l,onSig),chain&&chain.sigState);return r;}
+  const mode=GCFG.payoutMode==='devnet'&&GCFG.cluster!=='mainnet-beta'?'devnet':'dry';await E.execute(r.epoch,mode,(w,l,onSig)=>chain.transfer(treasury,w,l,onSig),chain&&chain.sigState,(items,onSig)=>chain.transferMany(treasury,items,onSig),ledgerAppend);return r;}
 // Daily drift seed: a recent blockhash recorded once per Taipei day (published in /api/seeds for audit).
 async function ensureSeed(){const day=G.dayOf(Date.now());if(E.S.seeds&&E.S.seeds[day]||!chain)return;const {blockhash}=await chain.conn.getLatestBlockhash('finalized');E.setDaySeed(day,blockhash);}
 if(require.main===module){setInterval(async()=>{try{await ensureSeed().catch(e=>console.error('seed',e.message));E.advance();}catch(e){console.error('tick',e.message);}},Math.min(10e3,E.C.TICK_MS/2)).unref();
@@ -150,9 +153,10 @@ async function gameRoute(req,res,u,p,ip){
     if(p==='/api/admin/airdrop'){if(GCFG.cluster!=='devnet')return send(req,res,400,{error:'devnet only'});const pub=new chain.web3.Connection(chain.web3.clusterApiUrl('devnet'),'confirmed');
       try{const sig=await pub.requestAirdrop(new chain.web3.PublicKey(b.to||treasury.publicKey.toBase58()),Math.min(+b.lamports||1e9,2e9));return send(req,res,200,{sig});}catch(e){return send(req,res,502,{error:String(e.message).slice(0,200)});}}
     if(p==='/api/admin/fund'){if(GCFG.cluster==='mainnet-beta')return send(req,res,400,{error:'devnet only'});if(!isWallet(b.to)||!(+b.lamports>0))return send(req,res,400,{error:'bad request'});const sig=await chain.transfer(treasury,b.to,Math.min(Math.floor(+b.lamports),2e9));return send(req,res,200,{sig});}
+    if(p==='/api/admin/ledger'){let t='';try{t=fs.readFileSync(LEDGER,'utf8');}catch(x){}const rows=t.split('\n').filter(Boolean).map(l=>JSON.parse(l));return send(req,res,200,{count:rows.length,rows:rows.slice(-500)});}
     if(p==='/api/admin/tick'){E.advance();return send(req,res,200,{tick:E.S.tick});}
     if(p==='/api/admin/epoch'){const idx=b.idx!=null?b.idx:(E.S.epochs.length?E.S.epochs[E.S.epochs.length-1].idx+1:0);return send(req,res,200,await doEpoch(idx,b.pool));}
-    if(p==='/api/admin/retry'){const e=E.S.epochs.find(x=>x.idx===b.idx);if(!e)return send(req,res,404,{});await E.execute(e,GCFG.payoutMode==='devnet'&&GCFG.cluster!=='mainnet-beta'?'devnet':'dry',(w,l,onSig)=>chain.transfer(treasury,w,l,onSig),chain&&chain.sigState);return send(req,res,200,e);}
+    if(p==='/api/admin/retry'){const e=E.S.epochs.find(x=>x.idx===b.idx);if(!e)return send(req,res,404,{});await E.execute(e,GCFG.payoutMode==='devnet'&&GCFG.cluster!=='mainnet-beta'?'devnet':'dry',(w,l,onSig)=>chain.transfer(treasury,w,l,onSig),chain&&chain.sigState,(items,onSig)=>chain.transferMany(treasury,items,onSig),ledgerAppend);return send(req,res,200,e);}
   }
   return false;}
 

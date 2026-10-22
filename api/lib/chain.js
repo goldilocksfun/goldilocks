@@ -32,7 +32,12 @@ async function transfer(from,to,lamports,onSig){const {blockhash,lastValidBlockH
   const tx=new web3.Transaction({feePayer:from.publicKey,blockhash,lastValidBlockHeight}).add(web3.SystemProgram.transfer({fromPubkey:from.publicKey,toPubkey:new web3.PublicKey(to),lamports}));tx.sign(from);
   const sig=bs58.encode(tx.signature);if(onSig)onSig(sig,lastValidBlockHeight);await conn.sendRawTransaction(tx.serialize(),{skipPreflight:false,preflightCommitment:'confirmed'});
   const r=await conn.confirmTransaction({signature:sig,blockhash,lastValidBlockHeight},'confirmed');if(r.value&&r.value.err)throw new Error('Transaction failed: '+JSON.stringify(r.value.err));return sig;}
+// Several transfers in one transaction (atomic: all land or none). Same sign-first contract as transfer.
+async function transferMany(from,items,onSig){const {blockhash,lastValidBlockHeight}=await conn.getLatestBlockhash('confirmed');
+  const tx=new web3.Transaction({feePayer:from.publicKey,blockhash,lastValidBlockHeight});for(const it of items)tx.add(web3.SystemProgram.transfer({fromPubkey:from.publicKey,toPubkey:new web3.PublicKey(it.to),lamports:it.lamports}));tx.sign(from);
+  if(tx.serialize().length>1232)throw new Error('batch too large');const sig=bs58.encode(tx.signature);if(onSig)onSig(sig,lastValidBlockHeight);await conn.sendRawTransaction(tx.serialize(),{preflightCommitment:'confirmed'});
+  const r=await conn.confirmTransaction({signature:sig,blockhash,lastValidBlockHeight},'confirmed');if(r.value&&r.value.err)throw new Error('Transaction failed: '+JSON.stringify(r.value.err));return sig;}
 // State of an earlier payment: 'landed', 'failed', 'expired' (safe to resend) or 'unknown' (wait).
 async function sigState(sig,lvh){const r=(await conn.getSignatureStatuses([sig],{searchTransactionHistory:true})).value[0];if(r)return r.err?'failed':'landed';
   if(lvh&&(await conn.getBlockHeight('confirmed'))>lvh+10)return 'expired';return 'unknown';}
-module.exports={web3,conn,CLUSTER,MAINNET_ENABLED,MEMO,loadOrCreateKeypair,supply,holders,verifyBurn,transfer,sigState,balance:pk=>conn.getBalance(new web3.PublicKey(pk))};
+module.exports={web3,conn,CLUSTER,MAINNET_ENABLED,MEMO,loadOrCreateKeypair,supply,holders,verifyBurn,transfer,transferMany,sigState,balance:pk=>conn.getBalance(new web3.PublicKey(pk))};

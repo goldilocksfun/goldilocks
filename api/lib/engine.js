@@ -53,11 +53,25 @@ function create(db,save,opts={}){
   // Execute pending payouts. mode dry: mark dry-run. mode devnet: real transfers via send(wallet,lamports,onSig).
   // The signature is stored before sending. A row with a stored signature is resent only after state(sig) proves the old one can never land.
   const running=new Set();
-  async function execute(e,mode,send,state){if(running.has(e.idx))return e;running.add(e.idx);try{for(const p of e.payouts){if(p.status==='sent'||p.status==='dry-run'&&mode==='dry')continue;
-      if(mode==='dry'){p.status='dry-run';continue;}
-      if(p.sig&&p.status!=='sent'){let st='unknown';try{st=state?await state(p.sig,p.lvh):'unknown';}catch(x){}
-        if(st==='landed'){p.status='sent';save();continue;}if(st==='unknown'){p.status='unconfirmed';save();continue;}p.sig=null;}
-      try{p.status='sending';await send(p.wallet,p.lamports,(sig,lvh)=>{p.sig=sig;p.lvh=lvh;save();});p.status='sent';delete p.error;}catch(x){p.status='failed';p.error=String(x.message||x).slice(0,160);}save();}}finally{running.delete(e.idx);}return e;}
+  // sendMany(items,onSig) sends up to BATCH rows in one atomic transaction; a failed batch falls back to one row per transaction.
+  // onLedger(row,epoch) is called once per row when it is confirmed sent (append-only ledger outside the state file).
+  async function execute(e,mode,send,state,sendMany,onLedger){if(running.has(e.idx))return e;running.add(e.idx);const B=Math.max(1,C.PAYOUT_BATCH||1);
+    const done=p=>{p.status='sent';delete p.error;if(onLedger)try{onLedger(p,e);}catch(x){}};
+    try{if(mode==='dry'){for(const p of e.payouts)if(p.status!=='sent')p.status='dry-run';save();return e;}
+      // 1. resolve rows that already carry a signature
+      const bySig={};for(const p of e.payouts)if(p.sig&&p.status!=='sent')(bySig[p.sig]=bySig[p.sig]||[]).push(p);
+      for(const [sig,rows] of Object.entries(bySig)){let st='unknown';try{st=state?await state(sig,rows[0].lvh):'unknown';}catch(x){}
+        if(st==='landed')rows.forEach(done);else if(st==='unknown')rows.forEach(p=>p.status='unconfirmed');else rows.forEach(p=>{p.sig=null;p.lvh=null;p.batch=null;});save();}
+      // 2. send the rest in batches
+      const todo=e.payouts.filter(p=>p.status!=='sent'&&!p.sig);
+      for(let k=0;k<todo.length;k+=B){const grp=todo.slice(k,k+B);
+        const mark=(rows,b)=>(sig,lvh)=>{rows.forEach(p=>{p.sig=sig;p.lvh=lvh;p.batch=b;p.status='sending';});save();};
+        if(grp.length>1&&sendMany){try{await sendMany(grp.map(p=>({to:p.wallet,lamports:p.lamports})),mark(grp,grp.length));grp.forEach(done);save();continue;}
+          catch(x){let st='unknown';if(grp[0].sig){try{st=state?await state(grp[0].sig,grp[0].lvh):'unknown';}catch(y){}}
+            if(st==='landed'){grp.forEach(done);save();continue;}if(st==='unknown'&&grp[0].sig&&!/failed|too large|0x1|insufficient/i.test(String(x.message))){grp.forEach(p=>{p.status='unconfirmed';p.error=String(x.message||x).slice(0,160);});save();continue;}
+            grp.forEach(p=>{p.sig=null;p.lvh=null;p.batch=null;});}}
+        for(const p of grp){try{await send(p.wallet,p.lamports,mark([p],1));done(p);}catch(x){p.status='failed';p.error=String(x.message||x).slice(0,160);}save();}}}
+    finally{running.delete(e.idx);}return e;}
   const pub=p=>p&&{wallet:p.wallet,src:p.src,au:+p.a.toFixed(5),distance:p.d,zone:p.zone,mass:p.mass,eligible:!!p.eligible,holdSince:p.holdSince,zoneHours:+(p.zoneTicks*G.th(C)).toFixed(2),evolutionHours:+(p.lifeTicks*G.th(C)).toFixed(2),stage:p.stage,weight:+p.weight.toFixed(4),burns:p.burns.slice(-10),freeBurnAvailable:canFreeBurn(p.wallet)};
   function earnings(w){const rows=[];let total=0;for(const e of S.epochs)for(const p of e.payouts)if(p.wallet===w){rows.push({epoch:e.idx,lamports:p.lamports,status:p.status,sig:p.sig,at:e.closedAt});if(p.status==='sent'||p.status==='dry-run')total+=p.lamports;}
     const p=S.planets[w];const pendingWeight=p?p.weight-(p.paidWeight||0):0;const tw=Object.values(S.planets).reduce((a,q)=>a+(q.weight-(q.paidWeight||0)),0);
