@@ -42,8 +42,14 @@ function create(db,save,opts={}){
       payouts:Object.entries(r.pay).map(([wallet,lamports])=>({wallet,lamports,status:'pending',sig:null})),carry:r.carry};
     S.epochs.push(e);save();return{epoch:e};}
   // Execute pending payouts. mode dry: mark dry-run. mode devnet: real transfers via send(wallet,lamports). Retries only unsent rows.
-  async function execute(e,mode,send){for(const p of e.payouts){if(p.status==='sent'||p.status==='dry-run'&&mode==='dry')continue;
-      if(mode==='dry'){p.status='dry-run';continue;}try{p.status='sending';save();p.sig=await send(p.wallet,p.lamports);p.status='sent';}catch(x){p.status='failed';p.error=String(x.message||x).slice(0,160);}save();}return e;}
+  // Execute pending payouts. mode dry: mark dry-run. mode devnet: real transfers via send(wallet,lamports,onSig).
+  // The signature is stored before sending. A row with a stored signature is resent only after state(sig) proves the old one can never land.
+  const running=new Set();
+  async function execute(e,mode,send,state){if(running.has(e.idx))return e;running.add(e.idx);try{for(const p of e.payouts){if(p.status==='sent'||p.status==='dry-run'&&mode==='dry')continue;
+      if(mode==='dry'){p.status='dry-run';continue;}
+      if(p.sig&&p.status!=='sent'){let st='unknown';try{st=state?await state(p.sig,p.lvh):'unknown';}catch(x){}
+        if(st==='landed'){p.status='sent';save();continue;}if(st==='unknown'){p.status='unconfirmed';save();continue;}p.sig=null;}
+      try{p.status='sending';await send(p.wallet,p.lamports,(sig,lvh)=>{p.sig=sig;p.lvh=lvh;save();});p.status='sent';delete p.error;}catch(x){p.status='failed';p.error=String(x.message||x).slice(0,160);}save();}}finally{running.delete(e.idx);}return e;}
   const pub=p=>p&&{wallet:p.wallet,src:p.src,au:+p.a.toFixed(5),distance:p.d,zone:p.zone,mass:p.mass,eligible:!!p.eligible,holdSince:p.holdSince,zoneHours:+(p.zoneTicks*G.th(C)).toFixed(2),evolutionHours:+(p.lifeTicks*G.th(C)).toFixed(2),stage:p.stage,weight:+p.weight.toFixed(4),burns:p.burns.slice(-10),freeBurnAvailable:canFreeBurn(p.wallet)};
   function earnings(w){const rows=[];let total=0;for(const e of S.epochs)for(const p of e.payouts)if(p.wallet===w){rows.push({epoch:e.idx,lamports:p.lamports,status:p.status,sig:p.sig,at:e.closedAt});if(p.status==='sent'||p.status==='dry-run')total+=p.lamports;}
     const p=S.planets[w];const pendingWeight=p?p.weight-(p.paidWeight||0):0;const tw=Object.values(S.planets).reduce((a,q)=>a+(q.weight-(q.paidWeight||0)),0);

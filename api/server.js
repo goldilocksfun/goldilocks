@@ -51,7 +51,8 @@ function send(req,res,code,obj){const o=req.headers.origin;const h={'content-typ
   if(o&&ORIGINS.includes(o)){h['access-control-allow-origin']=o;h['vary']='Origin';h['access-control-allow-methods']='GET,POST,OPTIONS';h['access-control-allow-headers']='content-type,x-admin-key';}
   res.writeHead(code,h);res.end(obj===undefined?'':JSON.stringify(obj));}
 function body(req){return new Promise((ok,no)=>{let s='';req.on('data',d=>{s+=d;if(s.length>8192){no(new Error('too large'));req.destroy();}});req.on('end',()=>{try{ok(s?JSON.parse(s):{});}catch(e){no(new Error('bad json'));}});});}
-const ipOf=req=>String(process.env.TRUST_PROXY==='1'&&req.headers['x-forwarded-for']||req.socket.remoteAddress||'').split(',')[0].trim();
+// Behind Render + Cloudflare: cf-connecting-ip is set by the edge; otherwise the rightmost X-Forwarded-For hop (added by the proxy). The leftmost hop is client controlled.
+const ipOf=req=>{if(process.env.TRUST_PROXY==='1'){const cf=req.headers['cf-connecting-ip'];if(cf)return String(cf).trim();const x=String(req.headers['x-forwarded-for']||'').split(',').map(v=>v.trim()).filter(Boolean);if(x.length)return x[x.length-1];}return String(req.socket.remoteAddress||'');};
 
 const server=http.createServer(async(req,res)=>{
   const u=new URL(req.url,'http://x'),p=u.pathname,ip=ipOf(req);
@@ -66,7 +67,7 @@ const server=http.createServer(async(req,res)=>{
     if(p==='/api/nonce'&&req.method==='POST'){
       if(limited(ip,'nonce',20,600e3))return send(req,res,429,{error:'Too many tries. Wait a few minutes.'});
       const {wallet}=await body(req);if(!isWallet(wallet))return send(req,res,400,{error:'Invalid wallet.'});
-      const nonce=crypto.randomBytes(16).toString('hex'),iat=new Date().toISOString();nonces.set(wallet,{nonce,at:Date.now(),msg:message(wallet,nonce,iat)});
+      if(nonces.size>50000)return send(req,res,503,{error:'Busy. Try again in a minute.'});const nonce=crypto.randomBytes(16).toString('hex'),iat=new Date().toISOString();nonces.set(wallet,{nonce,at:Date.now(),msg:message(wallet,nonce,iat)});
       return send(req,res,200,{message:nonces.get(wallet).msg});}
     if(p==='/api/claim'&&req.method==='POST'){
       if(!OPEN)return send(req,res,403,{error:'Claims open soon.'});
@@ -104,13 +105,19 @@ const burnNonces=new Map();
 const EXCL=new Set(String(process.env.EXCLUDE_WALLETS||'').split(',').map(s=>s.trim()).filter(Boolean).concat(treasury?[treasury.publicKey.toBase58()]:[]));
 async function doSnapshot(){if(!chain||!GCFG.mint)return null;const [bal,sup]=await Promise.all([chain.holders(GCFG.mint),chain.supply(GCFG.mint)]);for(const x of EXCL)delete bal[x];E.snapshot(bal,sup);return{holders:Object.keys(bal).length,supply:sup};}
 async function doEpoch(idx,pool){const r=E.closeEpoch(idx,pool!=null?pool:GCFG.feePool);if(r.already)return r;
-  const mode=GCFG.payoutMode==='devnet'&&GCFG.cluster!=='mainnet-beta'?'devnet':'dry';await E.execute(r.epoch,mode,(w,l)=>chain.transfer(treasury,w,l));return r;}
+  const mode=GCFG.payoutMode==='devnet'&&GCFG.cluster!=='mainnet-beta'?'devnet':'dry';await E.execute(r.epoch,mode,(w,l,onSig)=>chain.transfer(treasury,w,l,onSig),chain&&chain.sigState);return r;}
 if(require.main===module){setInterval(()=>{try{E.advance();}catch(e){console.error('tick',e.message);}},Math.min(10e3,E.C.TICK_MS/2)).unref();
   if(GCFG.mint){const f=()=>doSnapshot().catch(e=>console.error('snap',e.message));f();setInterval(f,GCFG.snapMs).unref();}
   if(E.S.genesisEpoch==null){E.S.genesisEpoch=G.epochIndex(Date.now(),E.C);save();}
   let busy=false;if(GCFG.autoEpoch)setInterval(async()=>{if(busy)return;const idx=G.epochIndex(Date.now(),E.C)-1;const last=E.S.epochs.length?E.S.epochs[E.S.epochs.length-1].idx:E.S.genesisEpoch-1;
     if(idx>last){busy=true;try{E.advance();await doEpoch(idx);}catch(e){console.error('epoch',e.message);}busy=false;}},30e3).unref();}
-const isAdmin=req=>GCFG.admin&&req.headers['x-admin-key']===GCFG.admin;
+const adminFails=new Map();
+// Timing safe key compare; 10 wrong keys per IP per 15 minutes locks that IP out of admin routes.
+const isAdmin=req=>{if(!GCFG.admin)return false;const ip=ipOf(req),now=Date.now();const f=(adminFails.get(ip)||[]).filter(t=>now-t<900e3);if(f.length>=10){adminFails.set(ip,f);return false;}
+  const a=crypto.createHash('sha256').update(String(req.headers['x-admin-key']||'')).digest(),b=crypto.createHash('sha256').update(GCFG.admin).digest();
+  if(crypto.timingSafeEqual(a,b))return true;f.push(now);adminFails.set(ip,f);return false;};
+setInterval(()=>{const now=Date.now();for(const [k,v] of burnNonces)if(now-v.at>NONCE_TTL)burnNonces.delete(k);for(const [k,a] of adminFails)if(!a.length||now-a[a.length-1]>900e3)adminFails.delete(k);},60e3).unref();
+const burnInflight=new Set();
 const burnMsg=(w,dir,n)=>`goldilocks burn ${dir} ${w} ${n}`;
 async function gameRoute(req,res,u,p,ip){
   if(p==='/api/game'&&req.method==='GET')return send(req,res,200,{cluster:GCFG.cluster,mainnet:GCFG.mainnet,mint:GCFG.mint||null,treasury:treasury?treasury.publicKey.toBase58():null,payoutMode:GCFG.payoutMode,tick:E.S.tick,tickMs:E.C.TICK_MS,epochMs:E.C.EPOCH_MS,epochAnchor:E.C.EPOCH_ANCHOR_MS,hz:[E.C.HZ_IN,E.C.HZ_OUT],clientRpc:process.env.CLIENT_RPC||(GCFG.cluster==='mainnet-beta'?null:'https://api.devnet.solana.com'),memoProgram:chain?chain.MEMO.toBase58():null,thrustLamports:E.C.THRUST_LAMPORTS,thrustStep:E.C.THRUST_STEP,split:[E.C.SPLIT_HZ,E.C.SPLIT_JACKPOT,E.C.SPLIT_OPS],minPayout:E.C.MIN_PAYOUT_LAMPORTS,minHoldMs:E.C.MIN_HOLD_MS,stages:E.C.STAGES,jackpot:E.S.jackpot,burnPool:E.S.burnPool,feePool:GCFG.feePool,planets:Object.keys(E.S.planets).length,lifeWinner:E.S.lifeWinner,lastSnapshot:E.S.lastSnap});
@@ -120,24 +127,29 @@ async function gameRoute(req,res,u,p,ip){
   if(p==='/api/leaderboard'&&req.method==='GET')return send(req,res,200,{planets:E.leaderboard()});
   if(p==='/api/epochs'&&req.method==='GET')return send(req,res,200,{jackpot:E.S.jackpot,epochs:E.S.epochs.slice(-30).reverse().map(e=>({idx:e.idx,closedAt:e.closedAt,pool:e.pool,burn:e.burn,hz:e.hz,jackpotIn:e.jackpotIn,ops:e.ops,totalWeight:e.totalWeight,jackpotAfter:e.jackpotAfter,award:e.award,payouts:e.payouts.map(x=>({wallet:x.wallet,lamports:x.lamports,status:x.status,sig:x.sig})),carry:e.carry}))});
   if(p==='/api/thruster/nonce'&&req.method==='POST'){if(limited(ip,'tn',30,600e3))return send(req,res,429,{error:'Too many tries.'});const {wallet,dir}=await body(req);if(!isWallet(wallet)||!['in','out'].includes(dir))return send(req,res,400,{error:'Invalid request.'});
-    if(!E.S.planets[wallet])return send(req,res,404,{error:'No planet for this wallet yet.'});const n=crypto.randomBytes(8).toString('hex');burnNonces.set(n,{wallet,dir,at:Date.now()});
+    if(!E.S.planets[wallet])return send(req,res,404,{error:'No planet for this wallet yet.'});if(burnNonces.size>20000)return send(req,res,503,{error:'Busy. Try again in a minute.'});const n=crypto.randomBytes(8).toString('hex');burnNonces.set(n,{wallet,dir,at:Date.now()});
     return send(req,res,200,{nonce:n,memo:burnMsg(wallet,dir,n),free:E.canFreeBurn(wallet),lamports:E.C.THRUST_LAMPORTS,memoProgram:chain?chain.MEMO.toBase58():null,treasury:treasury&&treasury.publicKey.toBase58(),cluster:GCFG.cluster});}
   if(p==='/api/thruster/verify'&&req.method==='POST'){if(limited(ip,'tv',30,600e3))return send(req,res,429,{error:'Too many tries.'});const {wallet,nonce,signature,messageSignature}=await body(req);
     if(signature&&E.S.burnSigs[signature])return send(req,res,200,Object.assign({already:true},E.S.burnSigs[signature]));
     const n=burnNonces.get(nonce);if(!n||n.wallet!==wallet||Date.now()-n.at>NONCE_TTL)return send(req,res,400,{error:'Burn request expired. Try again.'});
     const memo=burnMsg(wallet,n.dir,nonce);
     if(messageSignature){if(!E.canFreeBurn(wallet))return send(req,res,402,{error:'Free burn already used today.'});if(!verify(wallet,memo,messageSignature))return send(req,res,401,{error:'Signature could not be verified.'});burnNonces.delete(nonce);const r=E.applyBurn(wallet,n.dir,{});return send(req,res,r.error?400:200,r);}
-    if(!chain||!treasury)return send(req,res,503,{error:'Chain unavailable.'});if(typeof signature!=='string'||signature.length<80)return send(req,res,400,{error:'Missing transaction signature.'});
-    const v=await chain.verifyBurn(signature,{wallet,treasury:treasury.publicKey.toBase58(),lamports:E.C.THRUST_LAMPORTS,memo});if(!v.ok)return send(req,res,400,{error:v.error});
-    burnNonces.delete(nonce);const r=E.applyBurn(wallet,n.dir,{sig:signature,paid:v.paid});return send(req,res,r.error?400:200,r);}
+    if(!chain||!treasury)return send(req,res,503,{error:'Chain unavailable.'});if(typeof signature!=='string'||!/^[1-9A-HJ-NP-Za-km-z]{80,90}$/.test(signature))return send(req,res,400,{error:'Missing transaction signature.'});
+    // One verification at a time per nonce and per signature, so parallel requests cannot apply the same payment twice.
+    if(burnInflight.has(nonce)||burnInflight.has(signature))return send(req,res,409,{error:'This burn is already being checked.'});burnInflight.add(nonce);burnInflight.add(signature);
+    try{const v=await chain.verifyBurn(signature,{wallet,treasury:treasury.publicKey.toBase58(),lamports:E.C.THRUST_LAMPORTS,memo});if(!v.ok)return send(req,res,400,{error:v.error});
+      if(E.S.burnSigs[signature])return send(req,res,200,Object.assign({already:true},E.S.burnSigs[signature]));
+      if(!burnNonces.has(nonce))return send(req,res,400,{error:'Burn request expired. Try again.'});
+      burnNonces.delete(nonce);const r=E.applyBurn(wallet,n.dir,{sig:signature,paid:v.paid});return send(req,res,r.error?400:200,r);}
+    finally{burnInflight.delete(nonce);burnInflight.delete(signature);}}
   if(p.startsWith('/api/admin/')){if(!isAdmin(req))return send(req,res,403,{error:'Forbidden.'});const b=req.method==='POST'?await body(req):{};
     if(p==='/api/admin/snapshot')return send(req,res,200,await doSnapshot()||{skipped:true});
     if(p==='/api/admin/airdrop'){if(GCFG.cluster!=='devnet')return send(req,res,400,{error:'devnet only'});const pub=new chain.web3.Connection(chain.web3.clusterApiUrl('devnet'),'confirmed');
       try{const sig=await pub.requestAirdrop(new chain.web3.PublicKey(b.to||treasury.publicKey.toBase58()),Math.min(+b.lamports||1e9,2e9));return send(req,res,200,{sig});}catch(e){return send(req,res,502,{error:String(e.message).slice(0,200)});}}
-    if(p==='/api/admin/fund'){if(GCFG.cluster==='mainnet-beta')return send(req,res,400,{error:'devnet only'});const sig=await chain.transfer(treasury,b.to,Math.min(+b.lamports,2e9));return send(req,res,200,{sig});}
+    if(p==='/api/admin/fund'){if(GCFG.cluster==='mainnet-beta')return send(req,res,400,{error:'devnet only'});if(!isWallet(b.to)||!(+b.lamports>0))return send(req,res,400,{error:'bad request'});const sig=await chain.transfer(treasury,b.to,Math.min(Math.floor(+b.lamports),2e9));return send(req,res,200,{sig});}
     if(p==='/api/admin/tick'){E.advance();return send(req,res,200,{tick:E.S.tick});}
     if(p==='/api/admin/epoch'){const idx=b.idx!=null?b.idx:(E.S.epochs.length?E.S.epochs[E.S.epochs.length-1].idx+1:0);return send(req,res,200,await doEpoch(idx,b.pool));}
-    if(p==='/api/admin/retry'){const e=E.S.epochs.find(x=>x.idx===b.idx);if(!e)return send(req,res,404,{});await E.execute(e,GCFG.payoutMode==='devnet'&&GCFG.cluster!=='mainnet-beta'?'devnet':'dry',(w,l)=>chain.transfer(treasury,w,l));return send(req,res,200,e);}
+    if(p==='/api/admin/retry'){const e=E.S.epochs.find(x=>x.idx===b.idx);if(!e)return send(req,res,404,{});await E.execute(e,GCFG.payoutMode==='devnet'&&GCFG.cluster!=='mainnet-beta'?'devnet':'dry',(w,l,onSig)=>chain.transfer(treasury,w,l,onSig),chain&&chain.sigState);return send(req,res,200,e);}
   }
   return false;}
 

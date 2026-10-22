@@ -27,6 +27,12 @@ async function verifyBurn(sig,{wallet,treasury,lamports,memo}){const tx=await co
     if(ix.programId&&MEMOS.has(ix.programId.toString())){const m=typeof ix.parsed==='string'?ix.parsed:(ix.data?Buffer.from(bs58.decode(ix.data)).toString():'');if(m===memo)memoOk=true;}}
   if(paid<lamports)return{ok:false,error:'Payment to the treasury is missing or too small.'};if(!memoOk)return{ok:false,error:'Memo does not match this burn.'};
   return{ok:true,paid,slot:tx.slot,blockTime:tx.blockTime};}
-async function transfer(from,to,lamports){const tx=new web3.Transaction().add(web3.SystemProgram.transfer({fromPubkey:from.publicKey,toPubkey:new web3.PublicKey(to),lamports}));
-  return web3.sendAndConfirmTransaction(conn,tx,[from],{commitment:'confirmed'});}
-module.exports={web3,conn,CLUSTER,MAINNET_ENABLED,MEMO,loadOrCreateKeypair,supply,holders,verifyBurn,transfer,balance:pk=>conn.getBalance(new web3.PublicKey(pk))};
+// Signs first and reports the signature through onSig before sending, so a crash or timeout never loses track of a payment.
+async function transfer(from,to,lamports,onSig){const {blockhash,lastValidBlockHeight}=await conn.getLatestBlockhash('confirmed');
+  const tx=new web3.Transaction({feePayer:from.publicKey,blockhash,lastValidBlockHeight}).add(web3.SystemProgram.transfer({fromPubkey:from.publicKey,toPubkey:new web3.PublicKey(to),lamports}));tx.sign(from);
+  const sig=bs58.encode(tx.signature);if(onSig)onSig(sig,lastValidBlockHeight);await conn.sendRawTransaction(tx.serialize(),{skipPreflight:false,preflightCommitment:'confirmed'});
+  const r=await conn.confirmTransaction({signature:sig,blockhash,lastValidBlockHeight},'confirmed');if(r.value&&r.value.err)throw new Error('Transaction failed: '+JSON.stringify(r.value.err));return sig;}
+// State of an earlier payment: 'landed', 'failed', 'expired' (safe to resend) or 'unknown' (wait).
+async function sigState(sig,lvh){const r=(await conn.getSignatureStatuses([sig],{searchTransactionHistory:true})).value[0];if(r)return r.err?'failed':'landed';
+  if(lvh&&(await conn.getBlockHeight('confirmed'))>lvh+10)return 'expired';return 'unknown';}
+module.exports={web3,conn,CLUSTER,MAINNET_ENABLED,MEMO,loadOrCreateKeypair,supply,holders,verifyBurn,transfer,sigState,balance:pk=>conn.getBalance(new web3.PublicKey(pk))};
