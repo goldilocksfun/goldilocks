@@ -2,7 +2,7 @@
 
 A live planet formation simulation where every wallet is a world.
 
-Each holder is a planet with a real orbit around a real star type. Only planets inside the habitable zone earn. The first planet to reach full life takes the season pot. Seasons last fourteen days. Outcomes come from orbital mechanics, not a lottery.
+Each holder is a planet with a real orbit around a real star type. Only planets inside the habitable zone earn. The first planet to reach full life takes the Life jackpot. Seasons last fourteen days. Outcomes come from orbital mechanics, not a lottery.
 
 Website: https://goldilockszone.fun  
 X: https://x.com/playgoldilocks  
