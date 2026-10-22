@@ -26,7 +26,7 @@ function planetFor(w){const r=rng(hash(w));const k=KINDS[Math.floor(r()*KINDS.le
 
 /* ---------- renderer ---------- */
 const cv=$('#cgl');const DPR=Math.min(devicePixelRatio,2);
-const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:false,powerPreference:'high-performance'});renderer.setPixelRatio(DPR);renderer.setSize(innerWidth,innerHeight);renderer.setClearColor(0x020308);
+const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:false,powerPreference:'high-performance'});renderer.setPixelRatio(DPR);renderer.setClearColor(0x020308);
 renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
 const scene=new THREE.Scene();const camera=new THREE.PerspectiveCamera(32,innerWidth/innerHeight,.1,4000);
 const P=new THREE.Vector3(30,0,0);const sys=new THREE.Group();sys.position.copy(P);scene.add(sys);
@@ -85,7 +85,8 @@ function applyPlanet(w){planet=planetFor(w);const u=pMat.uniforms;u.cA.value.cop
  atmMat.uniforms.c.value.set(planet.k.atm);tiltG.rotation.z=planet.tilt;ring.visible=planet.ring;moon.visible=planet.moon;moonMat.uniforms.seed.value=planet.seed+3}
 function materialize(){if(!planet)return;if(innerWidth<1000&&scrollY>40)scrollTo({top:0,behavior:RM?'auto':'smooth'});S.colT=1;setTimeout(()=>{S.formT=1;S.shock=0},RM?0:1300)}
 
-function layout(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h);composer.setSize(w,h);camera.aspect=w/h;
+const VH=(()=>{const d=document.createElement('div');d.style.cssText='position:fixed;top:0;height:100lvh;width:0;visibility:hidden;pointer-events:none';document.documentElement.appendChild(d);return()=>Math.max(d.offsetHeight||0,innerHeight)})();let LW=0,LH=0;
+function layout(){const w=innerWidth,h=VH();if(LW&&w===LW&&Math.abs(h-LH)<160&&matchMedia('(hover:none)').matches)return;LW=w;LH=h;renderer.setSize(w,h,false);composer.setSize(w,h);camera.aspect=w/h;
  const mob=w<1000;camera.fov=mob?44:30;camera.updateProjectionMatrix();
  if(mob)camera.setViewOffset(w,h,0,h*.3,w,h);else camera.setViewOffset(w,h,-w*.2,h*.02,w,h);}
 addEventListener('resize',layout);layout();
@@ -100,6 +101,7 @@ function frame(){const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;sky
  if(S.shock>=0){S.shock+=dt*.55;shock.scale.setScalar(1+S.shock*5);shock.material.opacity=Math.max(0,1-S.shock)*.9;if(S.shock>1.2)S.shock=-1}
  bloom.strength=.42+(1-Math.abs(f*2-1))*.25*(S.formT?1:0);
  const sc=Math.min(scrollY0/innerHeight,1.2);const cp=new THREE.Vector3(-2.4+S.mx*.6,.7-S.my*.4+sc*.6,8.6+sc*1.6).add(P);camera.position.lerp(cp,1-Math.exp(-dt*3));camera.lookAt(P.x,P.y+sc*.25,P.z);
+ if(innerWidth<1000){const o=Math.round((1-Math.min(1,Math.max(0,(scrollY0-innerHeight*.18)/(innerHeight*.35)))*.82)*100)/100;if(o!==frame.o){frame.o=o;cv.style.opacity=o}}else if(frame.o!==1){frame.o=1;cv.style.opacity=1}
  sunG.lookAt(camera.position);composer.render();requestAnimationFrame(frame)}
 const sky=createSky(scene,camera,{mobile:MOBILE(),rm:RM,dpr:DPR});window.__sky=sky;window.__cam=camera;
 requestAnimationFrame(frame);

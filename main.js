@@ -5,6 +5,7 @@ import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
 import {ShaderPass} from 'three/addons/postprocessing/ShaderPass.js';
 import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
 import {createSky} from './sky.js';
+const VH=(()=>{const d=document.createElement('div');d.style.cssText='position:fixed;top:0;height:100lvh;width:0;visibility:hidden;pointer-events:none';document.documentElement.appendChild(d);return()=>Math.max(d.offsetHeight||0,innerHeight)})();
 const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;if(RM)document.documentElement.classList.add('rm');const MOB=innerWidth<760;
 const gsap=window.gsap,ScrollTrigger=window.ScrollTrigger;gsap.registerPlugin(ScrollTrigger);
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
@@ -49,9 +50,9 @@ $('#snd').addEventListener('click',e=>{e.stopPropagation();soundOn=!soundOn;loca
 
 /* ---------- renderer ---------- */
 const canvas=$('#gl');const renderer=new THREE.WebGLRenderer({canvas,antialias:false,powerPreference:'high-performance'});
-const DPR=Math.min(devicePixelRatio||1,2);renderer.setPixelRatio(DPR);renderer.setSize(innerWidth,innerHeight);
+const DPR=Math.min(devicePixelRatio||1,2);renderer.setPixelRatio(DPR);renderer.setSize(innerWidth,VH(),false);
 renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.0;renderer.outputColorSpace=THREE.SRGBColorSpace;
-const scene=new THREE.Scene();const cam=new THREE.PerspectiveCamera(innerWidth<760?60:42,innerWidth/innerHeight,.05,4000);
+const scene=new THREE.Scene();const cam=new THREE.PerspectiveCamera(innerWidth<760?60:42,innerWidth/VH(),.05,4000);
 
 const NOISE=`
 vec3 mod289(vec3 x){return x-floor(x*(1./289.))*289.;}vec4 mod289(vec4 x){return x-floor(x*(1./289.))*289.;}
@@ -76,7 +77,7 @@ const PN=MOB?240:380,pP=new Float32Array(PN*3),pC=new Float32Array(PN*3),pS=new 
 const palette=[0xd8577a,0x5a5ad8,0x3a8ed8,0xe0905a,0x8a5ad0,0x4ab8b0,0x2a3a8a];const tcol=new THREE.Color();
 for(let i=0;i<PN;i++){const v=new THREE.Vector3().randomDirection().multiplyScalar(Math.pow(Math.random(),.5)*110);v.y*=.45;pP.set([v.x,v.y,v.z],i*3);tcol.set(palette[(Math.floor((v.x+120)/40)+Math.floor((v.z+120)/55)+(Math.random()<.3?1:0))%palette.length]);tcol.offsetHSL((Math.random()-.5)*.06,0,(Math.random()-.5)*.1);pC.set([tcol.r,tcol.g,tcol.b],i*3);pS[i]=40+Math.random()*90;pR[i]=Math.random()}
 const pg=new THREE.BufferGeometry();pg.setAttribute('position',new THREE.BufferAttribute(pP,3));pg.setAttribute('color',new THREE.BufferAttribute(pC,3));pg.setAttribute('aS',new THREE.BufferAttribute(pS,1));pg.setAttribute('aR',new THREE.BufferAttribute(pR,1));
-const puffMat=new THREE.ShaderMaterial({uniforms:{map:{value:puffTex()},c:{value:0},t:{value:0},op:{value:1},h:{value:innerHeight*DPR}},transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,vertexColors:true,
+const puffMat=new THREE.ShaderMaterial({uniforms:{map:{value:puffTex()},c:{value:0},t:{value:0},op:{value:1},h:{value:VH()*DPR}},transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,vertexColors:true,
 vertexShader:`attribute float aS,aR;uniform float c,t,h;varying vec3 vC;varying float vR,vF;void main(){vec3 p=position;float ang=t*.02*(1.+aR)+c*3.*(1.-aR*.5);mat2 m=mat2(cos(ang),-sin(ang),sin(ang),cos(ang));p.xz=m*p.xz;p*=mix(1.,.06+aR*.1,c);vC=color;vR=aR;vec4 mv=modelViewMatrix*vec4(p,1.);gl_PointSize=min(aS*mix(1.,.5,c)*h/(-mv.z)*.5,h*.6);vF=smoothstep(4.,30.,-mv.z);gl_Position=projectionMatrix*mv;}`,
 fragmentShader:`uniform sampler2D map;uniform float op,t;varying vec3 vC;varying float vR,vF;void main(){vec2 uv=gl_PointCoord-.5;float a=vR*6.28+t*.03;uv=mat2(cos(a),-sin(a),sin(a),cos(a))*uv;vec4 tx=texture2D(map,uv+.5);gl_FragColor=vec4(vC*tx.a*.05*op*vF,tx.a*op);}`});
 const puffs=new THREE.Points(pg,puffMat);scene.add(puffs);
@@ -87,7 +88,7 @@ const dA=new THREE.Color(0xff6a8e),dB=new THREE.Color(0x7d8bff),dC=new THREE.Col
 for(let i=0;i<N;i++){const v=new THREE.Vector3().randomDirection().multiplyScalar(Math.pow(Math.random(),.55)*95);v.y*=.42;v.x+=Math.sin(v.y*.08)*12;aCl.set([v.x,v.y,v.z],i*3);
 const r=3.2+Math.pow(Math.random(),1.6)*55,a=Math.random()*6.283;aDk.set([Math.cos(a)*r,(Math.random()-.5)*(.15+r*.035),Math.sin(a)*r],i*3);tcol.copy(Math.random()<.5?dA:dB).lerp(dC,Math.random()*.6);aCo.set([tcol.r,tcol.g,tcol.b],i*3);aRn[i]=Math.random()}
 const dg=new THREE.BufferGeometry();dg.setAttribute('position',new THREE.BufferAttribute(aCl,3));dg.setAttribute('aDk',new THREE.BufferAttribute(aDk,3));dg.setAttribute('color',new THREE.BufferAttribute(aCo,3));dg.setAttribute('aR',new THREE.BufferAttribute(aRn,1));
-const dustMat=new THREE.ShaderMaterial({uniforms:{c:{value:0},t:{value:0},op:{value:1},h:{value:innerHeight*DPR},gap:{value:0}},transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,vertexColors:true,
+const dustMat=new THREE.ShaderMaterial({uniforms:{c:{value:0},t:{value:0},op:{value:1},h:{value:VH()*DPR},gap:{value:0}},transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,vertexColors:true,
 vertexShader:`attribute vec3 aDk;attribute float aR;uniform float c,t,h,gap;varying vec3 vC;varying float vA,vB;void main(){float cc=clamp(c*1.2-aR*.2,0.,1.);cc=cc*cc*(3.-2.*cc);
 float r=length(aDk.xz);float ang=atan(aDk.z,aDk.x)+t*1.6/pow(r,1.5)*cc+t*.01;vec3 d=vec3(cos(ang)*r,aDk.y,sin(ang)*r);
 float sw=t*.015*(1.-cc);vec3 cl=position;cl.xz=mat2(cos(sw),-sin(sw),sin(sw),cos(sw))*cl.xz;
@@ -164,18 +165,18 @@ const yOrbit=orbitLine(1,0xf5c97a,.6);
 // jackpot burst
 const BN=4000,bDir=new Float32Array(BN*3),bR=new Float32Array(BN);for(let i=0;i<BN;i++){const v=new THREE.Vector3().randomDirection();bDir.set([v.x,v.y*.35,v.z],i*3);bR[i]=Math.random()}
 const bg=new THREE.BufferGeometry();bg.setAttribute('position',new THREE.BufferAttribute(bDir,3));bg.setAttribute('aR',new THREE.BufferAttribute(bR,1));
-const burstMat=new THREE.ShaderMaterial({uniforms:{j:{value:0},h:{value:innerHeight*DPR}},transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
+const burstMat=new THREE.ShaderMaterial({uniforms:{j:{value:0},h:{value:VH()*DPR}},transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
 vertexShader:`attribute float aR;uniform float j,h;varying float vA;void main(){float d=1.3+j*(3.+aR*14.);vec3 p=position*d;vA=(1.-j*.7)*step(.001,j)*(.4+aR*.6);vec4 mv=modelViewMatrix*vec4(p,1.);gl_PointSize=(1.+aR*2.)*h/(-mv.z)*.03;gl_Position=projectionMatrix*mv;}`,
 fragmentShader:`varying float vA;void main(){float d=length(gl_PointCoord-.5);float a=smoothstep(.5,0.,d);gl_FragColor=vec4(vec3(1.6,1.1,.5)*a*vA,a*vA);}`});
 you.add(new THREE.Points(bg,burstMat));
 const shock=[];for(let i=0;i<3;i++){const m=new THREE.Mesh(new THREE.RingGeometry(.97,1,256),new THREE.MeshBasicMaterial({color:new THREE.Color(1.1,.8,.4),transparent:true,opacity:0,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false}));m.rotation.x=-Math.PI/2;you.add(m);shock.push(m)}
 
 /* ---------- post ---------- */
-const isGL2=renderer.capabilities.isWebGL2;const rtMS=new THREE.WebGLRenderTarget(innerWidth*DPR,innerHeight*DPR,{type:THREE.HalfFloatType,samples:isGL2?4:0});const composer=new EffectComposer(renderer,rtMS);composer.setPixelRatio(DPR);composer.setSize(innerWidth,innerHeight);
+const isGL2=renderer.capabilities.isWebGL2;const rtMS=new THREE.WebGLRenderTarget(innerWidth*DPR,VH()*DPR,{type:THREE.HalfFloatType,samples:isGL2?4:0});const composer=new EffectComposer(renderer,rtMS);composer.setPixelRatio(DPR);composer.setSize(innerWidth,VH());
 composer.addPass(new RenderPass(scene,cam));
-const bloom=new UnrealBloomPass(new THREE.Vector2(innerWidth/2,innerHeight/2),.62,.5,.94);composer.addPass(bloom);
+const bloom=new UnrealBloomPass(new THREE.Vector2(innerWidth/2,VH()/2),.62,.5,.94);composer.addPass(bloom);
 composer.addPass(new OutputPass());
-const finalPass=new ShaderPass({uniforms:{tDiffuse:{value:null},t:{value:0},flash:{value:0},gold:{value:0},lvl:{value:0},sun:{value:new THREE.Vector2(.5,.5)},sunI:{value:0},asp:{value:innerWidth/innerHeight},ca:{value:1}},
+const finalPass=new ShaderPass({uniforms:{tDiffuse:{value:null},t:{value:0},flash:{value:0},gold:{value:0},lvl:{value:0},sun:{value:new THREE.Vector2(.5,.5)},sunI:{value:0},asp:{value:innerWidth/VH()},ca:{value:1}},
 vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
 fragmentShader:`uniform sampler2D tDiffuse;uniform float t,sunI,asp,ca,flash,gold,lvl;uniform vec2 sun;varying vec2 vUv;
 float h(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
@@ -186,7 +187,7 @@ float lum=dot(col,vec3(.299,.587,.114));col=mix(col,col*vec3(.92,1.,1.08),smooth
 float vig=smoothstep(1.05,.25,length(c*vec2(asp*.8,1.)));col*=mix(.55,1.,vig);col=mix(vec3(dot(col,vec3(.2126,.7152,.0722))),col,1.06);col=max(col-vec3(.006,.005,.0),0.)+vec3(.0,.002,.006)*(1.-vig);
 vec2 q=gl_FragCoord.xy+fract(t*7.)*97.;col+=(h(q)+h(q+17.3)-1.)*(1./255.)*1.5;col+=(h(vUv*vec2(960.,540.)+fract(t*3.))-.5)*.012;gl_FragColor=vec4(col,1.);}`});
 composer.addPass(finalPass);
-const fxaa=new ShaderPass({uniforms:{tDiffuse:{value:null},rs:{value:new THREE.Vector2(1/(innerWidth*DPR),1/(innerHeight*DPR))}},
+const fxaa=new ShaderPass({uniforms:{tDiffuse:{value:null},rs:{value:new THREE.Vector2(1/(innerWidth*DPR),1/(VH()*DPR))}},
 vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
 fragmentShader:`uniform sampler2D tDiffuse;uniform vec2 rs;varying vec2 vUv;float L(vec3 c){return dot(c,vec3(.299,.587,.114));}
 void main(){vec3 nw=texture2D(tDiffuse,vUv+vec2(-1.,-1.)*rs).rgb,ne=texture2D(tDiffuse,vUv+vec2(1.,-1.)*rs).rgb,sw=texture2D(tDiffuse,vUv+vec2(-1.,1.)*rs).rgb,se=texture2D(tDiffuse,vUv+vec2(1.,1.)*rs).rgb;vec4 m=texture2D(tDiffuse,vUv);
@@ -194,7 +195,7 @@ float a=L(nw),b=L(ne),c=L(sw),d=L(se),e=L(m.rgb);float mn=min(e,min(min(a,b),min
 vec2 dir=vec2(-((a+b)-(c+d)),((a+c)-(b+d)));float rd=max((a+b+c+d)*.03125,1./128.);float rm=1./(min(abs(dir.x),abs(dir.y))+rd);dir=clamp(dir*rm,-8.,8.)*rs;
 vec3 A=.5*(texture2D(tDiffuse,vUv+dir*(1./3.-.5)).rgb+texture2D(tDiffuse,vUv+dir*(2./3.-.5)).rgb);vec3 B=A*.5+.25*(texture2D(tDiffuse,vUv-dir*.5).rgb+texture2D(tDiffuse,vUv+dir*.5).rgb);float lb=L(B);
 gl_FragColor=vec4((lb<mn||lb>mx)?A:B,1.);}`});composer.addPass(fxaa);
-addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);composer.setSize(innerWidth,innerHeight);cam.aspect=innerWidth/innerHeight;cam.fov=innerWidth<760?60:42;cam.updateProjectionMatrix();finalPass.uniforms.asp.value=cam.aspect;fxaa.uniforms.rs.value.set(1/(innerWidth*renderer.getPixelRatio()),1/(innerHeight*renderer.getPixelRatio()));[puffMat,dustMat,burstMat].forEach(m=>m.uniforms.h.value=innerHeight*DPR)});
+var lastW=innerWidth,lastH=VH();addEventListener('resize',()=>{const nh=VH();if(innerWidth===lastW&&Math.abs(nh-lastH)<160&&matchMedia('(hover:none)').matches)return;lastW=innerWidth;lastH=nh;renderer.setSize(innerWidth,nh,false);composer.setSize(innerWidth,nh);cam.aspect=innerWidth/nh;cam.fov=innerWidth<760?60:42;cam.updateProjectionMatrix();finalPass.uniforms.asp.value=cam.aspect;fxaa.uniforms.rs.value.set(1/(innerWidth*renderer.getPixelRatio()),1/(nh*renderer.getPixelRatio()));[puffMat,dustMat,burstMat].forEach(m=>m.uniforms.h.value=VH()*DPR)});
 
 /* ---------- scroll state ---------- */
 const st={p:0};let P=0;
@@ -210,7 +211,7 @@ const sky=createSky(scene,cam,{mobile:MOB,rm:RM,dpr:DPR});window.__sky=sky;let f
 const perf={n:0,sum:0,low:false};window.__perf=perf;
 function frame(){requestAnimationFrame(frame);const f0=performance.now();const rdt=clock.getDelta(),dt=Math.min(rdt,.05),t=clock.elapsedTime;sky.update(dt,t);
  P=RM?st.p:lerp(P,st.p,1-Math.exp(-Math.min(rdt,.3)*4.5));if(Math.abs(P-st.p)<1e-4)P=st.p;
- const sb=story.getBoundingClientRect().bottom;const vis=sb>0;canvas.style.opacity=cl(sb/innerHeight*1.4-.2);document.body.classList.toggle('solid',sb<innerHeight*.6);document.querySelector('.hud').style.opacity=cl(sb/innerHeight*2-.5);
+ const sb=story.getBoundingClientRect().bottom;const vis=sb>innerHeight*.92;const ex=cl((sb/innerHeight-.6)/.32);if(ex!==frame.ex){frame.ex=ex;const ev=String(Math.round(ex*1000)/1000);story.style.opacity=ev;['.crops','.lbx','.grid-ov'].forEach(q=>{const e=document.querySelector(q);if(e)e.style.opacity=ev});story.style.visibility=ex<=0?'hidden':'visible'}canvas.style.opacity=cl(sb/innerHeight*1.4-.2);document.body.classList.toggle('solid',sb<innerHeight*.6);document.querySelector('.hud').style.opacity=cl(sb/innerHeight*2-.5);
  // panels
  panels.forEach(o=>{const on=vis&&P>=o.a&&P<o.b;if(on&&o.state!==1){o.el.classList.add('on','in');o.el.classList.remove('out');o.state=1}else if(!on&&o.state===1){o.el.classList.add('out');o.el.classList.remove('in');o.state=2;setTimeout(()=>{if(o.state===2)o.el.classList.remove('on')},700)}});
  let ci=0;bounds.forEach((b,i)=>{if(P>=b)ci=i});if(ci!==frame.ci){frame.ci=ci;const cn=$('#chapname');cn.classList.add('swap');setTimeout(()=>{cn.textContent=names[ci];$('#chap').textContent='0'+ci;cn.classList.remove('swap')},220)}$('#prog').style.width=P*100+'%';
@@ -248,12 +249,12 @@ function frame(){requestAnimationFrame(frame);const f0=performance.now();const r
  const wideT=new THREE.Vector3().lerp(yPos,appear*.25*(1-ce));camTgt.copy(wideT).lerp(nearT,ce).lerp(yPos,jk);
  if(!RM){camPos.x+=nmx*lerp(3,.25,ce);camPos.y+=-nmy*lerp(2,.15,ce);}
  cam.position.copy(camPos);cam.lookAt(camTgt);cam.clearViewOffset();cam.updateMatrixWorld();const pn=yPos.clone().project(cam);const mob=innerWidth<760;const tx=mob?0:lerp(.24,0,jk),ty=mob?lerp(-.02,-.3,jk):lerp(0,-.1,jk);const pin=ce;
- const ox=(pn.x-tx)*innerWidth/2*pin,oy=-(pn.y-ty)*innerHeight/2*pin;if(Math.abs(ox)+Math.abs(oy)>.5)cam.setViewOffset(innerWidth,innerHeight,ox,oy,innerWidth,innerHeight);
+ const ox=(pn.x-tx)*innerWidth/2*pin,oy=-(pn.y-ty)*lastH/2*pin;if(Math.abs(ox)+Math.abs(oy)>.5)cam.setViewOffset(innerWidth,lastH,ox,oy,innerWidth,lastH);
  // flare
  sunScr.set(0,0,0).project(cam);const onS=sunScr.z<1&&Math.abs(sunScr.x)<1.2&&Math.abs(sunScr.y)<1.2;finalPass.uniforms.sun.value.set(sunScr.x*.5+.5,sunScr.y*.5+.5);finalPass.uniforms.sunI.value=onS?ign*(1-ce*.6):0;
  corMat.uniforms.b.value*=1-ce*.9;finalPass.uniforms.flash.value=flash*ign;finalPass.uniforms.gold.value=eio(j)*.6;document.body.classList.toggle('cine',P>.875&&vis);bloom.strength+=flash*.5+lvl*.35;finalPass.uniforms.lvl.value=lvl;dustMat.uniforms.op.value*=1-ce*.5;
  composer.render();
- const ft=performance.now()-f0;perf.n++;perf.sum+=ft;if(!perf.low&&perf.n>90&&perf.sum/perf.n>24&&!window.__noAdapt){perf.low=true;const pr=Math.max(1,DPR*.7);renderer.setPixelRatio(pr);composer.setPixelRatio(pr);composer.setSize(innerWidth,innerHeight);fxaa.uniforms.rs.value.set(1/(innerWidth*pr),1/(innerHeight*pr))}
+ const ft=performance.now()-f0;perf.n++;perf.sum+=ft;if(!perf.low&&perf.n>90&&perf.sum/perf.n>24&&!window.__noAdapt){perf.low=true;const pr=Math.max(1,DPR*.7);renderer.setPixelRatio(pr);composer.setPixelRatio(pr);composer.setSize(innerWidth,VH());fxaa.uniforms.rs.value.set(1/(innerWidth*pr),1/(VH()*pr))}
  if(firstFrame){firstFrame=false;loadT=100}
 }
 renderer.compile(scene,cam);loadT=Math.max(loadT,80);frame();

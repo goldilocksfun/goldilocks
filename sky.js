@@ -26,7 +26,7 @@ export function createSky(scene,camera,o={}){
   float fb(vec3 p){float a=.5,s=0.;for(int i=0;i<5;i++){s+=a*n3(p);p=p*2.03+1.7;a*=.5;}return s;}
   void main(){vec3 p=vP;float a=fb(p*2.6+vec3(t*.006,0.,t*.004));float b=fb(p*4.2-vec3(0.,t*.009,t*.005)+a*1.3);float m=smoothstep(.45,.85,a*.6+b*.55);float band=exp(-pow(p.y*1.6-.15*sin(p.x*2.),2.)*3.);
    vec3 c=mix(vec3(.05,.16,.17),vec3(.3,.17,.06),smoothstep(.4,.7,b));gl_FragColor=vec4(c*m*(.25+band*.75)*.42,1.);}`},add));
- const veil=new THREE.Mesh(new THREE.SphereGeometry(R*1.05,48,32),veilM);G.add(veil);
+ const veil=new THREE.Mesh(new THREE.SphereGeometry(R*1.05,48,32),veilM);if(!mob)G.add(veil);
  // streaks: comets (head + dust tail + ion tail) and shooting stars, built from camera facing ribbons
  const tailVS=`attribute vec2 aUV;varying vec2 vU;void main(){vU=aUV;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`;
  const tailFS=`uniform vec3 c;uniform float op,k,t,seed;varying vec2 vU;void main(){float u=vU.x,v=vU.y;float w=mix(.18,1.,pow(u,.7));float x=v/w;float fall=pow(1.-u,k);
