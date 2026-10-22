@@ -82,3 +82,4 @@ body.cl{cursor:auto;--lvl:.4;min-height:100vh}body.cl a,body.cl button{cursor:po
 html.rm .rv,html.rm .step,html.rm .pcard{transition:none}
 .wtag{font-style:normal;font-size:9px;color:var(--teal);border:1px solid rgba(122,240,207,.3);border-radius:20px;padding:3px 7px;margin-left:2px}.wn img[src=""],.wn img:not([src]){visibility:hidden}
 .foot-r{display:flex;align-items:center;gap:10px}.cl-foot{align-items:center}
+@media(max-height:800px) and (min-width:1001px){.pcard{align-self:start;position:sticky;top:max(96px,calc(100vh - 300px));margin:0;padding:12px 16px;width:300px}.pcard .pc-grid{gap:8px 16px;padding:10px 0}.pcard .pc-grid b{font-size:17px;margin-top:3px}.pcard .pc-top{padding-bottom:8px}.pc-trait{padding:7px 0;font-size:9.5px;line-height:1.5}.pcard .pc-bot{padding-top:7px}}
