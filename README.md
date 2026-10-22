@@ -4,7 +4,15 @@ A live planet formation simulation where every wallet is a world.
 
 Each holder is a planet with a real orbit around a real star type. Only planets inside the habitable zone earn. The first planet to reach full life takes the season pot. Seasons last fourteen days. Outcomes come from orbital mechanics, not a lottery.
 
-This repository contains the scroll-driven landing experience.
+Website: https://goldilockszone.fun  
+X: https://x.com/playgoldilocks  
+GitHub: https://github.com/goldilocksfun/goldilocks
+
+This repository contains the scroll-driven landing experience, the free planet claim page (`claim.html`) and its API (`api/`, deployed on Render).
+
+## Free planet claim
+
+Pre-launch: follow @playgoldilocks on X, connect and sign with a Solana wallet (message signature only, no transaction), and invite friends with a personal link. `config.js` holds `API_BASE` and `X_HANDLE`.
 
 ## Stack
 

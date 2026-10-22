@@ -4,6 +4,7 @@ import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
 import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
 import {ShaderPass} from 'three/addons/postprocessing/ShaderPass.js';
 import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
+import {createSky} from './sky.js';
 const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;if(RM)document.documentElement.classList.add('rm');const MOB=innerWidth<760;
 const gsap=window.gsap,ScrollTrigger=window.ScrollTrigger;gsap.registerPlugin(ScrollTrigger);
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
@@ -205,9 +206,9 @@ const camKeys=[0,.12,.25,.38,.47,.6];
 function wideCam(p){let i=0;while(i<camKeys.length-2&&p>camKeys[i+1])i++;const lt=eio(seg(p,camKeys[i],camKeys[i+1]));return camPath.getPoint((i+lt)/(camKeys.length-1))}
 const yPos=new THREE.Vector3(),camPos=new THREE.Vector3(),camTgt=new THREE.Vector3(),tmpV=new THREE.Vector3(),sunScr=new THREE.Vector3();
 const R={au:$('#r-au'),k:$('#r-k'),esi:$('#r-esi'),life:$('#r-life'),zone:$('#r-zone'),box:$('#readout')};
-let firstFrame=true;const clock=new THREE.Clock();const story=$('#story');
+const sky=createSky(scene,cam,{mobile:MOB,rm:RM,dpr:DPR});window.__sky=sky;let firstFrame=true;const clock=new THREE.Clock();const story=$('#story');
 const perf={n:0,sum:0,low:false};window.__perf=perf;
-function frame(){requestAnimationFrame(frame);const f0=performance.now();const rdt=clock.getDelta(),dt=Math.min(rdt,.05),t=clock.elapsedTime;
+function frame(){requestAnimationFrame(frame);const f0=performance.now();const rdt=clock.getDelta(),dt=Math.min(rdt,.05),t=clock.elapsedTime;sky.update(dt,t);
  P=RM?st.p:lerp(P,st.p,1-Math.exp(-Math.min(rdt,.3)*4.5));if(Math.abs(P-st.p)<1e-4)P=st.p;
  const sb=story.getBoundingClientRect().bottom;const vis=sb>0;canvas.style.opacity=cl(sb/innerHeight*1.4-.2);document.body.classList.toggle('solid',sb<innerHeight*.6);document.querySelector('.hud').style.opacity=cl(sb/innerHeight*2-.5);
  // panels

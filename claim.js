@@ -4,6 +4,7 @@ import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
 import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
 import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
 import {NOISE,planetVS,planetFS} from './planet-shaders.js';
+import {createSky} from './sky.js';
 const CFG=Object.assign({API_BASE:'',X_HANDLE:''},window.CONFIG||{});const API=String(CFG.API_BASE||'').replace(/\/+$/,'');
 const $=s=>document.querySelector(s);const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;if(RM)document.documentElement.classList.add('rm');
 const LS={get:k=>{try{return localStorage.getItem('gl_'+k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem('gl_'+k,v)}catch(e){}}};
@@ -90,7 +91,7 @@ function layout(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h);compose
 addEventListener('resize',layout);layout();
 addEventListener('pointermove',e=>{S.mx=e.clientX/innerWidth-.5;S.my=e.clientY/innerHeight-.5});
 const clock=new THREE.Clock();let scrollY0=0;addEventListener('scroll',()=>{scrollY0=scrollY},{passive:true});
-function frame(){const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;
+function frame(){const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;sky.update(dt,t);
  S.col+=(S.colT-S.col)*(1-Math.exp(-dt*1.6));S.form+=(S.formT-S.form)*(1-Math.exp(-dt*(RM?50:1.1)));if(S.formT&&S.form>.999)S.form=1;
  const f=S.form;pMat.uniforms.form.value=f;moonMat.uniforms.form.value=f;pMat.uniforms.t.value=t;cloudMat.uniforms.t.value=t;cloudMat.uniforms.u.value=planet?f*planet.k.cloud:0;atmMat.uniforms.u.value=f;ringMat.uniforms.u.value=f;
  dMat.uniforms.t.value=t;dMat.uniforms.col.value=S.col;ghost.material.uniforms.t.value=t;ghost.material.uniforms.u.value=Math.max(0,1-f*1.6)*(1-S.col*.5);ghost.scale.setScalar(.8+S.col*.2);
@@ -100,6 +101,7 @@ function frame(){const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;
  bloom.strength=.42+(1-Math.abs(f*2-1))*.25*(S.formT?1:0);
  const sc=Math.min(scrollY0/innerHeight,1.2);const cp=new THREE.Vector3(-2.4+S.mx*.6,.7-S.my*.4+sc*.6,8.6+sc*1.6).add(P);camera.position.lerp(cp,1-Math.exp(-dt*3));camera.lookAt(P.x,P.y+sc*.25,P.z);
  sunG.lookAt(camera.position);composer.render();requestAnimationFrame(frame)}
+const sky=createSky(scene,camera,{mobile:MOBILE(),rm:RM,dpr:DPR});window.__sky=sky;window.__cam=camera;
 requestAnimationFrame(frame);
 
 /* ---------- UI ---------- */

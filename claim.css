@@ -81,3 +81,4 @@ body.cl{cursor:auto;--lvl:.4;min-height:100vh}body.cl a,body.cl button{cursor:po
  .cl-foot{flex-direction:column;padding:22px}.sx p{max-width:none}.steps{margin-top:32px}}
 html.rm .rv,html.rm .step,html.rm .pcard{transition:none}
 .wtag{font-style:normal;font-size:9px;color:var(--teal);border:1px solid rgba(122,240,207,.3);border-radius:20px;padding:3px 7px;margin-left:2px}.wn img[src=""],.wn img:not([src]){visibility:hidden}
+.foot-r{display:flex;align-items:center;gap:10px}.cl-foot{align-items:center}
