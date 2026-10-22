@@ -1,13 +1,13 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Goldilocks | Only the habitable survive</title>
-<link rel="preload" href="fonts/space-grotesk-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="fonts/instrument-serif-latin-400-italic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/newsreader-latin-300-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/ibm-plex-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="icon" type="image/svg+xml" href="favicon.svg"><meta name="theme-color" content="#020308">
 <meta name="description" content="A live planet formation simulation on Solana. Every wallet is a world. Only the habitable earn.">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <meta property="og:type" content="website"><meta property="og:url" content="https://goldilockszone.fun/"><meta property="og:title" content="Goldilocks | Only the habitable survive"><meta property="og:description" content="A live planet formation simulation on Solana. Every wallet is a world.">
 <meta property="og:image" content="https://goldilockszone.fun/assets/og.jpg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
-<meta name="twitter:site" content="@playgoldilocks"><meta name="twitter:creator" content="@playgoldilocks"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Goldilocks"><meta name="twitter:description" content="Every wallet is a world. Only the habitable earn."><meta name="twitter:image" content="https://goldilockszone.fun/assets/og.jpg"><link rel="stylesheet" href="style.css">
+<meta name="twitter:site" content="@playgoldilocks"><meta name="twitter:creator" content="@playgoldilocks"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Goldilocks"><meta name="twitter:description" content="Every wallet is a world. Only the habitable earn."><meta name="twitter:image" content="https://goldilockszone.fun/assets/og.jpg"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="v9.css">
 <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","three/addons/":"./vendor/jsm/"}}</script>
 </head><body class="loading">
 <div id="loader"><div class="l-top"><span>GOLDILOCKS</span><span>SEASON 01</span></div><div class="l-mid"><div class="l-num"><span id="lnum">000</span></div><svg class="l-orb" viewBox="0 0 200 200"><circle cx="100" cy="100" r="80"/><circle cx="100" cy="100" r="52" class="z"/><circle cx="100" cy="100" r="6" class="s"/><g><circle cx="180" cy="100" r="3.5" class="p"/></g></svg></div><div class="l-bar"><i id="lbar"></i></div><button id="lenter" class="l-enter" data-h><span>Enter</span><i></i></button><div class="l-bot"><span id="lstage">Seeding molecular cloud</span><span>G2V / 5778 K</span></div></div>
@@ -30,18 +30,18 @@
 </div>
 <main>
 <section id="story">
-  <div class="panel" data-a="0" data-b=".1"><p class="kicker">Season 01 / G2V main sequence</p><h1 class="split">Every wallet<br>is a <span class="serif">world.</span></h1><p class="sub">A live planet formation simulation. Scroll to watch a solar system be born.</p><div class="scrollcue mono"><i></i>Scroll</div></div>
+  <div class="panel" data-a="0" data-b=".1"><p class="kicker">Season 01 / G2V main sequence</p><h1 class="split">Every wallet<br>is a <span class="serif">world.</span></h1><p class="sub">A planet formation simulation on Solana. Scroll to watch one system form, from cold cloud to first life.</p><div class="scrollcue mono"><i></i>Scroll</div></div>
   <div class="panel" data-a=".11" data-b=".23"><p class="kicker">01 / Collapse</p><h2 class="split">Gravity <span class="serif">wins.</span></h2><p class="sub">A cold molecular cloud folds in on itself. Pressure climbs until fusion ignites.</p></div>
   <div class="panel" data-a=".24" data-b=".37"><p class="kicker">02 / Accretion</p><h2 class="split">Dust becomes <span class="serif">worlds.</span></h2><p class="sub">Each holder is a planet with a real orbit, real mass and real physics.</p></div>
   <div class="panel" data-a=".38" data-b=".5"><p class="kicker">03 / Habitable zone</p><h2 class="split">Not too hot.<br>Not too <span class="serif">cold.</span></h2><p class="sub">Only planets inside the zone earn SOL. Everyone else drifts.</p></div>
   <div class="panel" data-a=".51" data-b=".63"><p class="kicker">04 / Migration</p><h2 class="split">Your planet <span class="serif">moves in.</span></h2><p class="sub">Orbits decay. Eccentricity shifts. Position is everything.</p></div>
   <div class="panel" data-a=".64" data-b=".85"><p class="kicker">05 / Abiogenesis</p><h2 class="split">Air. Water. <span class="serif">Life.</span></h2>
     <div class="meters"><div><span>Atmosphere</span><b><i id="m1"></i></b><em id="v1">0</em></div><div><span>Ocean</span><b><i id="m2"></i></b><em id="v2">0</em></div><div><span>Life</span><b><i id="m3"></i></b><em id="v3">0</em></div></div></div>
-  <div class="panel center" data-a=".87" data-b="1.01"><p class="kicker gold">First life detected</p><h2 class="split big"><span class="serif goldtxt">Jackpot.</span></h2><p class="sub">The first planet to reach full life takes the season pot. No lottery. Pure orbital mechanics.</p></div>
+  <div class="panel center" data-a=".87" data-b="1.01"><p class="kicker gold">First life detected</p><h2 class="split big"><span class="serif goldtxt">First life.</span></h2><p class="sub">The first planet to reach full biosignature takes the season pot. There is no lottery, only orbital mechanics.</p></div>
 </section>
 
 <div class="seam" aria-hidden="true"></div><section id="actions" class="flat">
- <div class="sec-head"><p class="kicker">Interventions</p><h2 class="split">Bend the <span class="serif">physics.</span></h2><p class="sub">Five ways to change your fate. Each one costs SOL and every result is on chain.</p></div>
+ <div class="sec-head"><p class="kicker">Interventions</p><h2 class="split">Five <span class="serif">interventions.</span></h2><p class="sub">Five interventions are available to every holder. Each costs SOL and every result is recorded on chain.</p></div>
  <div class="grid">
  <article class="card" data-h><div class="cv"><canvas data-anim="thruster"></canvas></div><div class="meta"><span class="mono">A.01</span><span class="mono dim">Orbit</span></div><h3>Thruster Burn</h3><p>Nudge your orbit inward or outward.</p></article>
  <article class="card" data-h><div class="cv"><canvas data-anim="comet"></canvas></div><div class="meta"><span class="mono">A.02</span><span class="mono dim">Ocean</span></div><h3>Comet Delivery</h3><p>Crash ice into your world. Instant oceans.</p></article>
@@ -51,7 +51,7 @@
  </div></section>
 
 <section id="sim" class="flat">
- <div class="sec-head"><p class="kicker">Live system preview</p><h2 class="split">Drop a planet. <span class="serif">Watch it fly.</span></h2><p class="sub">Click inside the field to spawn a world. Worlds that hold the zone glow.</p></div>
+ <div class="sec-head"><p class="kicker">Live system preview</p><h2 class="split">The field, <span class="serif">live.</span></h2><p class="sub">Click inside the field to place a planet. Planets holding the habitable zone are marked in gold.</p></div>
  <div class="simwrap" data-h><canvas id="simc"></canvas>
   <div class="simstats"><div><span>Planets</span><b id="s1">0</b></div><div><span>In zone</span><b id="s2">0</b></div><div><span>Star</span><b>G2V</b></div><div><span>Season</span><b>14 d</b></div></div>
   <div class="simtag mono dim">Newtonian n body / dt 0.004</div></div>
@@ -59,18 +59,18 @@
 
 <section id="claim" class="flat claimcta">
  <div class="cc-in">
-  <div class="cc-copy"><p class="kicker gold">Pre-launch / Free planet</p><h2 class="split">Claim a world <span class="serif goldtxt">for free.</span></h2><p class="sub">Before Season 01 begins, every wallet that completes three steps receives a planet generated from its own address.</p>
+  <div class="cc-copy"><p class="kicker gold">Pre-launch / One per wallet</p><h2 class="split">Claim a world <span class="serif goldtxt">for free.</span></h2><p class="sub">Before Season 01 opens, each wallet that completes three steps receives one planet, generated from its own address.</p>
    <a class="pill big" href="claim.html" data-h>Claim your planet</a></div>
   <ol class="cc-steps">
-   <li><span class="mono">01</span><div><h3>Follow on X</h3><p>Stay on the launch signal.</p></div></li>
+   <li><span class="mono">01</span><div><h3>Follow on X</h3><p>Launch dates and the season start are posted there first.</p></div></li>
    <li><span class="mono">02</span><div><h3>Connect and sign</h3><p>Phantom, Solflare or Backpack. A signature only, no transaction, no fee.</p></div></li>
-   <li><span class="mono">03</span><div><h3>Invite friends</h3><p>A personal link. Every friend who claims lifts your rank.</p></div></li>
+   <li><span class="mono">03</span><div><h3>Invite friends</h3><p>Each friend who claims through your link is counted on the board.</p></div></li>
   </ol>
  </div>
 </section>
 <section id="join" class="flat cta">
  <svg class="orbitsvg" viewBox="0 0 800 800" aria-hidden="true"><circle cx="400" cy="400" r="250"/><circle cx="400" cy="400" r="330" class="hz"/><circle cx="400" cy="400" r="390"/><g class="spin"><circle cx="730" cy="400" r="7" class="pl"/></g><circle cx="400" cy="400" r="18" class="sun"/></svg>
- <p class="kicker gold">Season 01 / Fourteen days</p><h2 class="split huge">Find your <span class="serif">orbit.</span></h2><p class="sub">One star. One zone. One living world.</p><a class="pill big" href="#join" data-h>Enter season 01</a></section>
+ <p class="kicker gold">Season 01 / Fourteen days</p><h2 class="split huge">Find your <span class="serif">orbit.</span></h2><p class="sub">One star, one habitable zone, fourteen days.</p><a class="pill big" href="#join" data-h>Enter season 01</a></section>
 </main>
 <footer>
  <div class="f-top"><div class="f-cols mono dim"><span>Star G2V</span><span>Season 01</span><span>Fourteen days</span></div><a class="logo" href="#"><svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="14" class="ring"/><circle cx="20" cy="20" r="2.2" class="sun"/><g class="orb"><circle cx="34" cy="20" r="3.2" class="pl"/></g></svg>Goldilocks</a><div class="links"><a class="soc" href="https://x.com/playgoldilocks" target="_blank" rel="noopener" aria-label="Goldilocks on X" data-h><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.75 3h3.07l-6.71 7.67L22 21h-6.18l-4.84-6.33L5.44 21H2.37l7.18-8.2L2 3h6.34l4.37 5.78L17.75 3Zm-1.08 16.18h1.7L7.4 4.73H5.58l11.09 14.45Z"/></svg></a><a class="soc" href="https://github.com/goldilocksfun/goldilocks" target="_blank" rel="noopener" aria-label="Goldilocks on GitHub" data-h><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.25.45-2.28 1.18-3.08-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.62 1.58.23 2.75.11 3.04.74.8 1.18 1.83 1.18 3.08 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg></a></div></div>

@@ -1,12 +1,12 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Claim your free planet | Goldilocks</title>
-<link rel="preload" href="fonts/space-grotesk-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="fonts/instrument-serif-latin-400-italic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/newsreader-latin-300-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/ibm-plex-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="icon" type="image/svg+xml" href="favicon.svg"><meta name="theme-color" content="#020308">
 <meta name="description" content="Season 01 pre-launch. Follow, invite and sign with your Solana wallet to claim a free planet. No transaction, no fee.">
 <meta property="og:type" content="website"><meta property="og:url" content="https://goldilockszone.fun/claim.html"><meta property="og:title" content="Claim your free planet | Goldilocks"><meta property="og:description" content="Every wallet is a world. Claim yours before Season 01 begins.">
 <meta property="og:image" content="https://goldilockszone.fun/assets/og.jpg"><meta name="twitter:site" content="@playgoldilocks"><meta name="twitter:creator" content="@playgoldilocks"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Claim your free planet"><meta name="twitter:description" content="Every wallet is a world. Claim yours before Season 01 begins."><meta name="twitter:image" content="https://goldilockszone.fun/assets/og.jpg">
-<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="claim.css">
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="claim.css"><link rel="stylesheet" href="v9.css">
 <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","three/addons/":"./vendor/jsm/"}}</script>
 </head><body class="cl">
 <canvas id="cgl" aria-hidden="true"></canvas><div class="cl-vig" aria-hidden="true"></div>
@@ -17,11 +17,11 @@
   <div class="cl-copy">
    <p class="kicker gold rv">Season 01 / Pre-launch</p>
    <h1 class="rv">Claim your<br>free <span class="serif goldtxt">planet.</span></h1>
-   <p class="sub rv">Every wallet is a world. Complete three steps before Season 01 begins and a planet is generated from your wallet address, yours to steer into the habitable zone.</p>
+   <p class="sub rv">One planet per wallet, generated from its address: mass, orbit, surface temperature and composition. Complete three steps before Season 01 opens and it is yours.</p>
    <ol class="steps" id="steps">
     <li class="step rv" data-s="follow"><span class="idx mono">01</span><div class="sx"><h3>Follow on X</h3><p id="fdesc">Follow the official account for launch news and the season start.</p></div><a class="sbtn" id="bFollow" target="_blank" rel="noopener" href="#">Follow</a><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M7 12.4l3.2 3.1L17 8.7"/></svg></span></li>
     <li class="step rv" data-s="sign"><span class="idx mono">02</span><div class="sx"><h3>Connect and sign</h3><p id="sdesc">Phantom, Solflare or Backpack. A message signature only. No transaction, no fee, no funds move.</p></div><button class="sbtn" id="bSign">Connect wallet</button><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M7 12.4l3.2 3.1L17 8.7"/></svg></span></li>
-    <li class="step rv" data-s="invite"><span class="idx mono">03</span><div class="sx"><h3>Invite friends</h3><p id="idesc">Your personal link appears once your planet is claimed. Every friend who claims climbs you up the board.</p>
+    <li class="step rv" data-s="invite"><span class="idx mono">03</span><div class="sx"><h3>Invite friends</h3><p id="idesc">Your personal link appears after you claim. Each friend who claims through it is counted on the board.</p>
       <div class="ref" id="ref"><input id="refIn" readonly aria-label="Your referral link" value=""><button class="sbtn sm" id="bCopy">Copy</button></div></div><span class="ibadge mono" id="ibadge"><b id="inv">0</b> invited</span><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M7 12.4l3.2 3.1L17 8.7"/></svg></span></li>
    </ol>
    <p class="msg mono" id="msg" role="status" aria-live="polite"></p>
