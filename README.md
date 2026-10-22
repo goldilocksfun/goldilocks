@@ -27,9 +27,9 @@ The game engine that applies these rules is in progress; the site and claim API 
 - Holder planets: any wallet holding at least 0.01 percent of supply gets a planet, even without a claim.
 - Mass scales linearly with holdings, from 1 at 0.01 percent of supply up to 50 at the 0.5 percent cap. Holdings above 0.5 percent add no mass.
 - Holdings count after they have been held for 24 hours.
-- Payouts: planets inside the habitable zone share a daily SOL payout at 20:00 Taipei time (UTC+8).
+- Payouts: planets inside the habitable zone share a daily SOL payout at 20:00 Taipei time (12:00 UTC).
 - Interventions: the first thruster burn each day is free, after that each burn costs 0.01 SOL.
-- Split: 70 / 20 / 10.
+- Creator fee split: 70 percent to the habitable zone pool (paid daily in SOL by mass multiplied by time in zone), 20 percent to the Life jackpot, 10 percent to operations.
 
 ## Planets
 

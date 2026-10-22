@@ -87,3 +87,11 @@ html,body,footer,.cl-foot,.flat,#actions{background-color:#020308}
 #gl,#cgl{will-change:opacity}#cur,#cur-dot{display:none!important}
 
 .pc-trait{font-size:10px;letter-spacing:.06em;line-height:1.6;margin:0;padding:10px 0;border-top:1px solid var(--line)}.pc-trait:empty{display:none}.pc-trait a{color:var(--gold);text-decoration:underline;text-underline-offset:3px}
+
+.lrules{padding:40px calc(40px + 3vw) 140px}.lr-in{max-width:1240px;margin:0 auto;border-top:1px solid var(--line);padding-top:48px}
+.lrules h2{font-size:clamp(38px,4vw,60px);margin:14px 0 36px}
+.lr-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:0;border-top:1px solid var(--line);margin:0}
+.lr-grid div{padding:20px 20px 22px 0;border-bottom:1px solid var(--line)}.lr-grid div+div{padding-left:20px;border-left:1px solid var(--line)}
+.lr-grid dt{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin-bottom:10px}.lr-grid dd{margin:0;font-size:14px;line-height:1.6;color:var(--dim)}
+@media(max-width:1000px){.lr-grid{grid-template-columns:1fr 1fr}.lr-grid div+div{border-left:0;padding-left:0}.lrules{padding:20px 22px 90px}}
+@media(max-width:600px){.lr-grid{grid-template-columns:1fr}}
