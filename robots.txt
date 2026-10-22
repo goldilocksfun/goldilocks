@@ -1,0 +1,7 @@
+User-agent: *
+Disallow: /admin.html
+Disallow: /old_v1/
+Disallow: /old_v2/
+Disallow: /old_v3/
+Disallow: /old_v4/
+Disallow: /api/
