@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="style.css"><link rel="stylesheet" href="v9.css"><link rel="stylesheet" href="orbits.css">
 <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","three/addons/":"./vendor/jsm/"}}</script>
 </head><body class="ob">
-<canvas id="ogl"></canvas>
+<canvas id="ogl"></canvas><div id="labels" aria-hidden="true"></div><div id="tip" class="mono" hidden></div>
 <header class="nav"><a class="logo" href="index.html"><svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="14" class="ring"/><circle cx="20" cy="20" r="2.2" class="sun"/><g class="orb"><circle cx="34" cy="20" r="3.2" class="pl"/></g></svg>Goldilocks</a>
 <nav><a href="index.html" class="navlink">The system</a><a href="orbits.html" class="navlink cur">Orbits</a><a href="claim.html" class="pill">Free planet</a></nav></header>
 <aside class="ob-side">
@@ -21,7 +21,7 @@
  <p class="ob-note mono dim" id="demoNote">Preview layer. Simulated planets are not real wallets.</p>
 </aside>
 <section class="ob-panel" id="panel" hidden>
- <div class="pc-top mono"><span id="qName">Planet</span><button id="qClose" class="mono dim">Close</button></div>
+ <div class="pc-top mono"><span id="qName">Planet</span><span class="pc-act"><button id="qFollow" class="mono">Follow</button><button id="qClose" class="mono dim">Close</button></span></div>
  <div class="pc-grid">
   <div><span>Wallet</span><b id="qW" class="mono">..</b></div><div><span>Class</span><b id="qC">..</b></div>
   <div><span>Mass</span><b><em id="qM">0</em> M</b></div><div><span>Orbit</span><b><em id="qA">0</em> AU</b></div>
@@ -29,5 +29,6 @@
  </div>
  <div class="pc-bot mono dim"><span id="qS">Stage</span><span id="qNo"></span></div>
 </section>
+<div class="ob-ctl mono"><button id="play" type="button">Pause</button><span class="sep"></span><span class="dim">Speed</span><span id="spd"><button data-s="0.25" type="button">0.25x</button><button data-s="1" class="on" type="button">1x</button><button data-s="4" type="button">4x</button><button data-s="16" type="button">16x</button></span><span class="sep"></span><button id="home" type="button">Center</button></div>
 <div class="ob-legend mono dim"><span><i class="lg hz"></i>Habitable zone 0.95 to 1.37 AU</span><span id="hint">Drag to rotate. Scroll to zoom.</span></div>
 <script src="config.js"></script><script type="module" src="orbits.js"></script></body></html>
