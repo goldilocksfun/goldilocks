@@ -21,12 +21,10 @@
  <p class="ob-note mono dim" id="demoNote">Preview layer. Simulated planets are not real wallets.</p>
 </aside>
 <section class="ob-panel" id="panel" hidden>
- <div class="pc-top mono"><span id="qName">Planet</span><span class="pc-act"><button id="qFollow" class="mono">Follow</button><button id="qClose" class="mono dim">Close</button></span></div>
- <div class="pc-grid">
-  <div><span>Wallet</span><b id="qW" class="mono">..</b></div><div><span>Class</span><b id="qC">..</b></div>
-  <div><span>Mass</span><b><em id="qM">0</em> M</b></div><div><span>Orbit</span><b><em id="qA">0</em> AU</b></div>
-  <div><span>Surface</span><b><em id="qK">0</em> K</b></div><div><span>Zone</span><b id="qZ">..</b></div>
- </div>
+ <div class="pc-top mono"><span id="qName">Planet</span><button id="qClose" class="mono dim">Close</button></div>
+ <p class="pc-desc" id="qD"></p>
+ <dl class="spec mono" id="qSpec"></dl>
+ <div class="pc-act"><button id="qView" class="mono">Back to system</button><button id="qFollow" class="mono">Follow</button></div>
  <div class="pc-bot mono dim"><span id="qS">Stage</span><span id="qNo"></span></div>
 </section>
 <div class="ob-ctl mono"><button id="play" type="button">Pause</button><span class="sep"></span><span class="dim">Speed</span><span id="spd"><button data-s="0.25" type="button">0.25x</button><button data-s="1" class="on" type="button">1x</button><button data-s="4" type="button">4x</button><button data-s="16" type="button">16x</button></span><span class="sep"></span><button id="home" type="button">Center</button></div>
