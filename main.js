@@ -31,7 +31,7 @@ $$('.sec-head,.cta,.claimcta').forEach(el=>ScrollTrigger.create({trigger:el,star
 /* ---------- cursor ---------- */
 const cur=$('#cur'),dot=$('#cur-dot');let mx=innerWidth/2,my=innerHeight/2,cx=mx,cy=my,nmx=0,nmy=0;
 addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;nmx=mx/innerWidth*2-1;nmy=my/innerHeight*2-1;dot.style.transform=`translate(${mx}px,${my}px)`});
-(function cl_(){cx=lerp(cx,mx,.16);cy=lerp(cy,my,.16);cur.style.transform=`translate(${cx}px,${cy}px)`;requestAnimationFrame(cl_)})();
+
 $$('[data-h],a,button').forEach(el=>{el.addEventListener('mouseenter',()=>cur.classList.add('h'));el.addEventListener('mouseleave',()=>cur.classList.remove('h'))});
 const au=$('#theme');let fadeT;au.src='audio/theme.mp3';au.preload='auto';
 let an=null,ad=null,lvl=0;const lvlTick=()=>{if(an&&!au.paused){an.getByteFrequencyData(ad);let s=0;for(let i=1;i<24;i++)s+=ad[i];const v=s/23/255;lvl=lerp(lvl,v*au.volume*1.8,.15)}else lvl=lerp(lvl,0,.08);document.documentElement.style.setProperty('--lvl',lvl.toFixed(3));requestAnimationFrame(lvlTick)};lvlTick();
@@ -50,7 +50,7 @@ $('#snd').addEventListener('click',e=>{e.stopPropagation();soundOn=!soundOn;loca
 
 /* ---------- renderer ---------- */
 const canvas=$('#gl');const renderer=new THREE.WebGLRenderer({canvas,antialias:false,powerPreference:'high-performance'});
-const DPR=Math.min(devicePixelRatio||1,2);renderer.setPixelRatio(DPR);renderer.setSize(innerWidth,VH(),false);
+const DPR=Math.min(devicePixelRatio||1,MOB?1:1.5);renderer.setPixelRatio(DPR);renderer.setSize(innerWidth,VH(),false);
 renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.0;renderer.outputColorSpace=THREE.SRGBColorSpace;
 const scene=new THREE.Scene();const cam=new THREE.PerspectiveCamera(innerWidth<760?60:42,innerWidth/VH(),.05,4000);
 
@@ -172,7 +172,7 @@ you.add(new THREE.Points(bg,burstMat));
 const shock=[];for(let i=0;i<3;i++){const m=new THREE.Mesh(new THREE.RingGeometry(.97,1,256),new THREE.MeshBasicMaterial({color:new THREE.Color(1.1,.8,.4),transparent:true,opacity:0,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false}));m.rotation.x=-Math.PI/2;you.add(m);shock.push(m)}
 
 /* ---------- post ---------- */
-const isGL2=renderer.capabilities.isWebGL2;const rtMS=new THREE.WebGLRenderTarget(innerWidth*DPR,VH()*DPR,{type:THREE.HalfFloatType,samples:isGL2?4:0});const composer=new EffectComposer(renderer,rtMS);composer.setPixelRatio(DPR);composer.setSize(innerWidth,VH());
+const isGL2=renderer.capabilities.isWebGL2;const rtMS=new THREE.WebGLRenderTarget(innerWidth*DPR,VH()*DPR,{type:THREE.HalfFloatType,samples:0});const composer=new EffectComposer(renderer,rtMS);composer.setPixelRatio(DPR);composer.setSize(innerWidth,VH());
 composer.addPass(new RenderPass(scene,cam));
 const bloom=new UnrealBloomPass(new THREE.Vector2(innerWidth/2,VH()/2),.62,.5,.94);composer.addPass(bloom);
 composer.addPass(new OutputPass());
@@ -207,11 +207,11 @@ const camKeys=[0,.12,.25,.38,.47,.6];
 function wideCam(p){let i=0;while(i<camKeys.length-2&&p>camKeys[i+1])i++;const lt=eio(seg(p,camKeys[i],camKeys[i+1]));return camPath.getPoint((i+lt)/(camKeys.length-1))}
 const yPos=new THREE.Vector3(),camPos=new THREE.Vector3(),camTgt=new THREE.Vector3(),tmpV=new THREE.Vector3(),sunScr=new THREE.Vector3();
 const R={au:$('#r-au'),k:$('#r-k'),esi:$('#r-esi'),life:$('#r-life'),zone:$('#r-zone'),box:$('#readout')};
-const sky=createSky(scene,cam,{mobile:MOB,rm:RM,dpr:DPR});window.__sky=sky;let firstFrame=true;const clock=new THREE.Clock();const story=$('#story');
+const sky=createSky(scene,cam,{mobile:MOB,rm:RM,dpr:DPR});window.__sky=sky;let SB=0,SBh=0;const storyB=()=>{if(!SB||SBh!==document.documentElement.scrollHeight){SBh=document.documentElement.scrollHeight;SB=story.offsetTop+story.offsetHeight}return SB};addEventListener('resize',()=>{SB=0},{passive:true});let firstFrame=true;const clock=new THREE.Clock();const story=$('#story');
 const perf={n:0,sum:0,low:false};window.__perf=perf;
-function frame(){requestAnimationFrame(frame);const f0=performance.now();const rdt=clock.getDelta(),dt=Math.min(rdt,.05),t=clock.elapsedTime;sky.update(dt,t);
+function frame(){requestAnimationFrame(frame);if(document.hidden)return;const f0=performance.now();const rdt=clock.getDelta(),dt=Math.min(rdt,.05),t=clock.elapsedTime;sky.update(dt,t);
  P=RM?st.p:lerp(P,st.p,1-Math.exp(-Math.min(rdt,.3)*4.5));if(Math.abs(P-st.p)<1e-4)P=st.p;
- const sb=story.getBoundingClientRect().bottom;const vis=sb>innerHeight*.92;const ex=cl((sb/innerHeight-.6)/.32);if(ex!==frame.ex){frame.ex=ex;const ev=String(Math.round(ex*1000)/1000);story.style.opacity=ev;['.crops','.lbx','.grid-ov'].forEach(q=>{const e=document.querySelector(q);if(e)e.style.opacity=ev});story.style.visibility=ex<=0?'hidden':'visible'}canvas.style.opacity=cl(sb/innerHeight*1.4-.2);document.body.classList.toggle('solid',sb<innerHeight*.6);document.querySelector('.hud').style.opacity=cl(sb/innerHeight*2-.5);
+ const sb=storyB()-scrollY;const vis=sb>innerHeight*.92;const ex=cl((sb/innerHeight-.6)/.32);if(ex!==frame.ex){frame.ex=ex;const ev=String(Math.round(ex*1000)/1000);story.style.opacity=ev;['.crops','.lbx','.grid-ov'].forEach(q=>{const e=document.querySelector(q);if(e)e.style.opacity=ev});story.style.visibility=ex<=0?'hidden':'visible'}canvas.style.opacity=cl(sb/innerHeight*1.4-.2);document.body.classList.toggle('solid',sb<innerHeight*.6);document.querySelector('.hud').style.opacity=cl(sb/innerHeight*2-.5);
  // panels
  panels.forEach(o=>{const on=vis&&P>=o.a&&P<o.b;if(on&&o.state!==1){o.el.classList.add('on','in');o.el.classList.remove('out');o.state=1}else if(!on&&o.state===1){o.el.classList.add('out');o.el.classList.remove('in');o.state=2;setTimeout(()=>{if(o.state===2)o.el.classList.remove('on')},700)}});
  let ci=0;bounds.forEach((b,i)=>{if(P>=b)ci=i});if(ci!==frame.ci){frame.ci=ci;const cn=$('#chapname');cn.classList.add('swap');setTimeout(()=>{cn.textContent=names[ci];$('#chap').textContent='0'+ci;cn.classList.remove('swap')},220)}$('#prog').style.width=P*100+'%';
@@ -253,8 +253,8 @@ function frame(){requestAnimationFrame(frame);const f0=performance.now();const r
  // flare
  sunScr.set(0,0,0).project(cam);const onS=sunScr.z<1&&Math.abs(sunScr.x)<1.2&&Math.abs(sunScr.y)<1.2;finalPass.uniforms.sun.value.set(sunScr.x*.5+.5,sunScr.y*.5+.5);finalPass.uniforms.sunI.value=onS?ign*(1-ce*.6):0;
  corMat.uniforms.b.value*=1-ce*.9;finalPass.uniforms.flash.value=flash*ign;finalPass.uniforms.gold.value=eio(j)*.6;document.body.classList.toggle('cine',P>.875&&vis);bloom.strength+=flash*.5+lvl*.35;finalPass.uniforms.lvl.value=lvl;dustMat.uniforms.op.value*=1-ce*.5;
- composer.render();
- const ft=performance.now()-f0;perf.n++;perf.sum+=ft;if(!perf.low&&perf.n>90&&perf.sum/perf.n>24&&!window.__noAdapt){perf.low=true;const pr=Math.max(1,DPR*.7);renderer.setPixelRatio(pr);composer.setPixelRatio(pr);composer.setSize(innerWidth,VH());fxaa.uniforms.rs.value.set(1/(innerWidth*pr),1/(VH()*pr))}
+ if(canvas.style.opacity!=='0')composer.render();
+ const ft=performance.now()-f0;perf.n++;perf.sum+=ft;if(!perf.low&&perf.n>90&&perf.sum/perf.n>20&&!window.__noAdapt){perf.low=true;const pr=Math.max(1,DPR*.7);renderer.setPixelRatio(pr);composer.setPixelRatio(pr);composer.setSize(innerWidth,VH());fxaa.uniforms.rs.value.set(1/(innerWidth*pr),1/(VH()*pr))}
  if(firstFrame){firstFrame=false;loadT=100}
 }
 renderer.compile(scene,cam);loadT=Math.max(loadT,80);frame();

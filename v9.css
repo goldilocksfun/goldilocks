@@ -81,3 +81,7 @@ footer,.cl-foot{background:#050505}
 html,body,footer,.cl-foot,.flat,#actions{background-color:#020308}
 #gl,#cgl{width:100vw;height:100vh;height:100lvh;filter:none!important;transform:translateZ(0);backface-visibility:hidden}
 .cl-vig{height:100lvh}
+/* v11 perf: no blur filters or backdrop blur on scroll-driven or fixed layers */
+.panel .kicker,.panel .sub,.panel .meters,.panel .scrollcue,.rv,#chapname,#chapname.swap{filter:none!important}
+.hud-r,body.solid .nav,.nav{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+#gl,#cgl{will-change:opacity}#cur,#cur-dot{display:none!important}

@@ -25,7 +25,7 @@ function planetFor(w){const r=rng(hash(w));const k=KINDS[Math.floor(r()*KINDS.le
  return{k,cls:k.cls,a:tint(k.a),b:tint(k.b),c:tint(k.c),seed:r()*60,au,K,esi,ring:k.gas?r()<.85:r()<.4,moon:r()<.75,tilt:(r()-.5)*.9,name:'GL '+(hash(w+'n')%9000+1000)+' '+'BCDFGHJKLMNPRSTVXZ'[Math.floor(r()*18)]}}
 
 /* ---------- renderer ---------- */
-const cv=$('#cgl');const DPR=Math.min(devicePixelRatio,2);
+const cv=$('#cgl');const DPR=Math.min(devicePixelRatio||1,innerWidth<760?1:1.5);
 const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:false,powerPreference:'high-performance'});renderer.setPixelRatio(DPR);renderer.setClearColor(0x020308);
 renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
 const scene=new THREE.Scene();const camera=new THREE.PerspectiveCamera(32,innerWidth/innerHeight,.1,4000);
@@ -77,7 +77,7 @@ const shock=new THREE.Mesh(new THREE.RingGeometry(.985,1,256),new THREE.MeshBasi
 const ghost=new THREE.Mesh(new THREE.SphereGeometry(1,64,64),new THREE.ShaderMaterial({transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,uniforms:{u:{value:1},t:{value:0}},vertexShader:planetVS,
  fragmentShader:NOISE+`uniform float u,t;varying vec3 vP,vN,vW;void main(){vec3 V=normalize(cameraPosition-vW);float rim=pow(1.-abs(dot(normalize(vN),V)),2.5);float n=fbm(normalize(vP)*3.+t*.05)*.5+.5;gl_FragColor=vec4(vec3(1.,.75,.45)*(rim*.5+n*.05)*u,1.);}`}));ghost.scale.setScalar(.8);sys.add(ghost);
 
-const composer=new EffectComposer(renderer,new THREE.WebGLRenderTarget(innerWidth*DPR,innerHeight*DPR,{type:THREE.HalfFloatType,samples:renderer.capabilities.isWebGL2?4:0}));composer.setPixelRatio(DPR);composer.setSize(innerWidth,innerHeight);
+const composer=new EffectComposer(renderer,new THREE.WebGLRenderTarget(innerWidth*DPR,innerHeight*DPR,{type:THREE.HalfFloatType,samples:renderer.capabilities.isWebGL2?2:0}));composer.setPixelRatio(DPR);composer.setSize(innerWidth,innerHeight);
 composer.addPass(new RenderPass(scene,camera));const bloom=new UnrealBloomPass(new THREE.Vector2(innerWidth/2,innerHeight/2),.55,.55,.9);composer.addPass(bloom);composer.addPass(new OutputPass());
 
 let planet=null;const S={form:0,formT:0,col:0,colT:0,ghost:1,shock:-1,mx:0,my:0};
@@ -92,7 +92,7 @@ function layout(){const w=innerWidth,h=VH();if(LW&&w===LW&&Math.abs(h-LH)<160&&m
 addEventListener('resize',layout);layout();
 addEventListener('pointermove',e=>{S.mx=e.clientX/innerWidth-.5;S.my=e.clientY/innerHeight-.5});
 const clock=new THREE.Clock();let scrollY0=0;addEventListener('scroll',()=>{scrollY0=scrollY},{passive:true});
-function frame(){const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;sky.update(dt,t);
+function frame(){if(document.hidden){requestAnimationFrame(frame);return}const dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;sky.update(dt,t);
  S.col+=(S.colT-S.col)*(1-Math.exp(-dt*1.6));S.form+=(S.formT-S.form)*(1-Math.exp(-dt*(RM?50:1.1)));if(S.formT&&S.form>.999)S.form=1;
  const f=S.form;pMat.uniforms.form.value=f;moonMat.uniforms.form.value=f;pMat.uniforms.t.value=t;cloudMat.uniforms.t.value=t;cloudMat.uniforms.u.value=planet?f*planet.k.cloud:0;atmMat.uniforms.u.value=f;ringMat.uniforms.u.value=f;
  dMat.uniforms.t.value=t;dMat.uniforms.col.value=S.col;ghost.material.uniforms.t.value=t;ghost.material.uniforms.u.value=Math.max(0,1-f*1.6)*(1-S.col*.5);ghost.scale.setScalar(.8+S.col*.2);
