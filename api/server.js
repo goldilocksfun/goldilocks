@@ -48,6 +48,7 @@ const server=http.createServer(async(req,res)=>{
     if(limited(ip,'all',240,60e3))return send(req,res,429,{error:'Too many requests. Slow down a little.'});
     if(p==='/health')return send(req,res,200,{ok:true});
     if(p==='/api/stats'&&req.method==='GET')return send(req,res,200,stats());
+    if(p==='/api/planets'&&req.method==='GET')return send(req,res,200,{planets:Object.values(db.claims).sort((a,b)=>a.no-b.no).map(c=>({wallet:c.wallet,no:c.no,at:c.at}))});
     if(p==='/api/me'&&req.method==='GET'){const w=u.searchParams.get('wallet');if(!isWallet(w))return send(req,res,400,{error:'Invalid wallet.'});return send(req,res,200,view(w));}
     if(p==='/api/ref'&&req.method==='GET'){const c=String(u.searchParams.get('code')||'').toUpperCase();return send(req,res,db.codes[c]?200:404,{valid:!!db.codes[c]});}
     if(p==='/api/nonce'&&req.method==='POST'){
