@@ -19,6 +19,18 @@ This repository contains the static site, served by GitHub Pages at the custom d
 
 Pre-launch: follow @playgoldilocks on X, connect and sign with a Solana wallet (message signature only, no transaction, no funds move), and invite friends with a personal link. The first 200 wallets get a free planet with a base mass. `config.js` holds `API_BASE` and `X_HANDLE`.
 
+## Season rules
+
+The game engine that applies these rules is in progress; the site and claim API are live.
+
+- Free planets: the first 200 wallets to complete the claim get a planet with mass 1. There is no token airdrop.
+- Holder planets: any wallet holding at least 0.01 percent of supply gets a planet, even without a claim.
+- Mass scales linearly with holdings, from 1 at 0.01 percent of supply up to 50 at the 0.5 percent cap. Holdings above 0.5 percent add no mass.
+- Holdings count after they have been held for 24 hours.
+- Payouts: planets inside the habitable zone share a daily SOL payout at 20:00 Taipei time (UTC+8).
+- Interventions: the first thruster burn each day is free, after that each burn costs 0.01 SOL.
+- Split: 70 / 20 / 10.
+
 ## Planets
 
 `planets.js` derives every planet deterministically from its wallet address, so the claim card and the observatory always show the same world. There are ten types: lava world, dune world, ocean world, glacial world, verdant terra, gas giant, eyeball world, sulfur world, barren rock and ringed super earth, with per wallet palettes, clouds, rings, moons and rare traits.
