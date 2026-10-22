@@ -4,7 +4,7 @@
 const web3=require('@solana/web3.js');const spl=require('@solana/spl-token');const nacl=require('tweetnacl');const bs58=(m=>m.default||m)(require('bs58'));const fs=require('fs');const assert=require('assert');
 const RPC=process.env.SIM_RPC;const API=process.env.API||'http://localhost:48787';const AK=process.env.ADMIN_KEY;const DIR=process.env.SIM_DIR||'/workspace/goldilocks-devnet';const CL=process.env.SIM_CLUSTER||'localnet';
 if(/mainnet/.test(RPC||''))throw new Error('refusing mainnet');
-const conn=new web3.Connection(RPC,'confirmed');const ST=DIR+'/sim-'+CL+'.json';
+const conn=require('./lib/pollconfirm')(new web3.Connection(RPC,'confirmed'));const ST=DIR+'/sim-'+CL+'.json';
 const kp=s=>web3.Keypair.fromSecretKey(Uint8Array.from(s));const save=o=>fs.writeFileSync(ST,JSON.stringify(o),{mode:0o600});
 const exurl=s=>CL==='devnet'?'https://explorer.solana.com/tx/'+s+'?cluster=devnet':s;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));const log=(...a)=>console.log(new Date().toISOString().slice(11,19),...a);
@@ -14,14 +14,15 @@ const ROLES=[['F1','free',0],['F2','free',0],['F3','free',0],['F4','free',0],['B
 async function setup(){const funder=kp(JSON.parse(fs.readFileSync(DIR+'/deployer.json')));
   if(CL==='localnet'){await conn.confirmTransaction(await conn.requestAirdrop(funder.publicKey,100e9));}
   log('funder',funder.publicKey.toBase58(),(await conn.getBalance(funder.publicKey))/1e9,'SOL');
-  const mintKp=web3.Keypair.generate();const mint=await spl.createMint(conn,funder,funder.publicKey,null,6,mintKp);log('mint',mint.toBase58());
-  const fa=await spl.getOrCreateAssociatedTokenAccount(conn,funder,mint,funder.publicKey);const ms=await spl.mintTo(conn,funder,mint,fa.address,funder,SUP);log('mintTo',exurl(ms));
-  const W={};const sigs={mint:ms};
-  for(const [n,src,b] of ROLES){const k=web3.Keypair.generate();W[n]={src,b,sk:[...k.secretKey],pk:k.publicKey.toBase58()};}
-  // one funding tx per wallet: SOL for fees and burns
-  for(const n in W){const s=await web3.sendAndConfirmTransaction(conn,new web3.Transaction().add(web3.SystemProgram.transfer({fromPubkey:funder.publicKey,toPubkey:new web3.PublicKey(W[n].pk),lamports:(n==='F1'||n==='F2')?6e7:8e6})),[funder]);sigs['fund_'+n]=s;}
-  for(const n in W){if(W[n].src!=='hold'&&n!=='FH')continue;const a=await spl.getOrCreateAssociatedTokenAccount(conn,funder,mint,new web3.PublicKey(W[n].pk));const s=await spl.transfer(conn,funder,fa.address,a.address,funder,bps(W[n].b));sigs['tok_'+n]=s;log('tokens',n,W[n].b+' bps',exurl(s));}
-  save({mint:mint.toBase58(),funder:funder.publicKey.toBase58(),W,sigs});log('setup done');}
+  // resumable: reuse state if a previous setup was interrupted
+  let st=null;try{st=JSON.parse(fs.readFileSync(ST));}catch(e){}
+  if(!st||!st.mint){const mintKp=web3.Keypair.generate();const mint=await spl.createMint(conn,funder,funder.publicKey,null,6,mintKp);log('mint',mint.toBase58());
+    const fa=await spl.getOrCreateAssociatedTokenAccount(conn,funder,mint,funder.publicKey);const ms=await spl.mintTo(conn,funder,mint,fa.address,funder,SUP);log('mintTo',exurl(ms));
+    const W={};for(const [n,src,b] of ROLES){const k=web3.Keypair.generate();W[n]={src,b,sk:[...k.secretKey],pk:k.publicKey.toBase58()};}st={mint:mint.toBase58(),funder:funder.publicKey.toBase58(),W,sigs:{mint:ms},done:{}};save(st);}
+  const mint=new web3.PublicKey(st.mint);const fa=await spl.getOrCreateAssociatedTokenAccount(conn,funder,mint,funder.publicKey);const W=st.W;st.done=st.done||{};
+  for(const n in W){if(st.done['fund_'+n])continue;const s=await web3.sendAndConfirmTransaction(conn,new web3.Transaction().add(web3.SystemProgram.transfer({fromPubkey:funder.publicKey,toPubkey:new web3.PublicKey(W[n].pk),lamports:(n==='F1'||n==='F2')?6e7:8e6})),[funder]);st.sigs['fund_'+n]=s;st.done['fund_'+n]=1;save(st);log('funded',n);}
+  for(const n in W){if(W[n].src!=='hold'&&n!=='FH'||st.done['tok_'+n])continue;const a=await spl.getOrCreateAssociatedTokenAccount(conn,funder,mint,new web3.PublicKey(W[n].pk));const s=await spl.transfer(conn,funder,fa.address,a.address,funder,bps(W[n].b));st.sigs['tok_'+n]=s;st.done['tok_'+n]=1;save(st);log('tokens',n,W[n].b+' bps',exurl(s));}
+  log('setup done');}
 const R={pass:[],fail:[]};const check=(c,m)=>{(c?R.pass:R.fail).push(m);log(c?'PASS':'FAIL',m);};
 async function claim(k){const w=k.publicKey.toBase58();const n=await j('/api/nonce',{method:'POST',body:JSON.stringify({wallet:w})});const sig=nacl.sign.detached(new TextEncoder().encode(n.b.message),k.secretKey);
   return j('/api/claim',{method:'POST',body:JSON.stringify({wallet:w,signature:Buffer.from(sig).toString('base64')})});}

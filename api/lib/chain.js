@@ -6,7 +6,7 @@ const MAINNET_ENABLED=process.env.MAINNET_ENABLED==='1';
 if(CLUSTER==='mainnet-beta'&&!MAINNET_ENABLED)throw new Error('mainnet is disabled by config');
 const KEY=process.env.HELIUS_API_KEY;
 const RPC=process.env.GAME_RPC_URL||(KEY?`https://${CLUSTER==='mainnet-beta'?'mainnet':'devnet'}.helius-rpc.com/?api-key=${KEY}`:web3.clusterApiUrl(CLUSTER));
-const conn=new web3.Connection(RPC,'confirmed');
+const conn=require('./pollconfirm')(new web3.Connection(RPC,'confirmed'));
 // Memo program used for burn memos (SPL Memo v2 by default, configurable). v1 memos are also accepted.
 const MEMO=new web3.PublicKey(process.env.MEMO_PROGRAM||'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
 const MEMOS=new Set(['MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr','Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo']);

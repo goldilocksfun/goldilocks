@@ -83,3 +83,14 @@ html.rm .rv,html.rm .step,html.rm .pcard{transition:none}
 .wtag{font-style:normal;font-size:9px;color:var(--teal);border:1px solid rgba(122,240,207,.3);border-radius:20px;padding:3px 7px;margin-left:2px}.wn img[src=""],.wn img:not([src]){visibility:hidden}
 .foot-r{display:flex;align-items:center;gap:10px}.cl-foot{align-items:center}
 @media(max-height:800px) and (min-width:1001px){.pcard{align-self:start;position:sticky;top:max(96px,calc(100vh - 300px));margin:0;padding:12px 16px;width:300px}.pcard .pc-grid{gap:8px 16px;padding:10px 0}.pcard .pc-grid b{font-size:17px;margin-top:3px}.pcard .pc-top{padding-bottom:8px}.pc-trait{padding:7px 0;font-size:9.5px;line-height:1.5}.pcard .pc-bot{padding-top:7px}}
+/* four-step claim: handle field, X task rows, reserved state */
+.ref.xh{max-height:60px;opacity:1;margin-top:14px}
+.xt{list-style:none;padding:0;margin:0;max-height:0;opacity:0;overflow:hidden;transition:max-height .9s var(--ease),opacity .7s,margin .9s var(--ease);font-size:11px}
+.step.unlocked .xt{max-height:260px;opacity:1;margin-top:14px}
+.xt li{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,.07)}
+.xt li span{flex:1;color:var(--dim)}.xt li b{color:var(--gold);font-weight:400}
+.xt li i{width:8px;height:8px;border-radius:50%;border:1px solid rgba(255,255,255,.25)}
+.xt li.ok i{background:var(--teal);border-color:var(--teal);box-shadow:0 0 8px var(--teal)}.xt li.ok span{color:var(--ink)}
+.xt li.no i{border-color:#ff9a7a}
+.step[aria-disabled="true"] .sbtn{opacity:.35;pointer-events:none}
+#bShare{margin-top:10px}

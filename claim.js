@@ -98,20 +98,29 @@ const sky=createSky(scene,camera,{mobile:MOBILE(),rm:RM,dpr:DPR});window.__sky=s
 requestAnimationFrame(frame);
 
 /* ---------- UI ---------- */
-const steps={follow:$('[data-s="follow"]'),sign:$('[data-s="sign"]'),invite:$('[data-s="invite"]')};
+const steps={follow:$('[data-s="follow"]'),sign:$('[data-s="sign"]'),tasks:$('[data-s="tasks"]'),invite:$('[data-s="invite"]')};
 const msg=(t,k)=>{const m=$('#msg');m.textContent=t||'';m.className='msg mono'+(k?' '+k:'')};
 const setStep=(k,st)=>{const e=steps[k];e.classList.toggle('done',st==='done');e.classList.toggle('active',st==='active')};
-function refresh(){const fol=LS.get('followed')==='1'||!CFG.X_HANDLE;const claimed=!!state.claim;
- setStep('follow',LS.get('followed')==='1'?'done':CFG.X_HANDLE?'active':'');setStep('sign',claimed?'done':fol?'active':'');setStep('invite',claimed&&state.claim.invites>0?'done':claimed?'active':'');
- steps.invite.classList.toggle('unlocked',claimed);$('#inv').textContent=claimed?state.claim.invites:0;
- if(claimed){$('#refIn').value=refLink(state.claim.code);$('#idesc').textContent='Share your personal link. Every friend who claims a planet through it counts toward your rank.'}}
+const state={wallet:null,claim:null,token:null,replyCode:null,cfg:null,tasks:{}};
+const hasHandle=()=>/^@?[A-Za-z0-9_]{1,15}$/.test(($('#xIn').value||'').trim());
+function refresh(){const c=state.claim,st=c&&c.status,cfg=state.cfg||{req:{}};const signed=!!state.token||!!st;const reserved=st==='reserved'||st==='final';const tid=cfg.tweetId;
+ setStep('follow',hasHandle()&&LS.get('followed')==='1'?'done':'active');setStep('sign',signed?'done':hasHandle()?'active':'');
+ setStep('tasks',reserved?'done':signed&&tid?'active':'');steps.tasks.classList.toggle('unlocked',!!tid&&signed||reserved);steps.tasks.setAttribute('aria-disabled',tid?'false':'true');
+ $('#tdesc').textContent=!tid?'Claim opens when the announcement post is live.':reserved?'All tasks verified.':'Do each task on X, then press Verify. Checks can take a minute to show up.';
+ for(const k of ['follow','repost','like','reply']){const li=$('#xt [data-t="'+k+'"]');li.hidden=cfg.req[k]===false;li.classList.toggle('ok',!!state.tasks[k]||reserved);li.classList.toggle('no',state.tasks[k]===false)}
+ $('#rCode').textContent=state.replyCode||'your code';if(tid){$('#bRt').href='https://x.com/intent/retweet?tweet_id='+tid;$('#bLk').href='https://x.com/intent/like?tweet_id='+tid;
+  $('#bRp').href='https://x.com/intent/post?in_reply_to='+tid+'&text='+encodeURIComponent('Claiming my free Goldilocks planet. '+(state.replyCode||''))}
+ const need=c&&c.invitesNeeded!=null?c.invitesNeeded:(cfg.req.invites||0);steps.invite.hidden=need<=0&&!reserved;
+ setStep('invite',st==='final'?'done':reserved?'active':'');steps.invite.classList.toggle('unlocked',reserved);$('#inv').textContent=c?(c.qualifiedInvites||0):0;$('#invN').textContent=need;
+ if(reserved){$('#refIn').value=refLink(c.code);$('#bShare').hidden=false;
+  $('#idesc').textContent=st==='final'?'Your planet is final. Keep sharing your link to climb the board.':'Your planet is reserved'+(c.holdUntil?' until '+new Date(c.holdUntil).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'')+'. Invite '+need+' friend'+(need>1?'s':'')+' who finish steps one to three to make it final.';
+  $('#pState').textContent=st==='final'?'Claimed / No. '+c.no:'Reserved'}}
 const refLink=c=>location.origin+location.pathname.replace(/[^/]*$/,'')+'claim.html?ref='+encodeURIComponent(c);
-const state={wallet:null,claim:null};
 // referral capture
 {const r=new URLSearchParams(location.search).get('ref');if(r&&/^[A-Za-z0-9]{4,12}$/.test(r))LS.set('ref',r.toUpperCase())}
 // follow step
-const bF=$('#bFollow');
-if(CFG.X_HANDLE){bF.href='https://x.com/intent/follow?screen_name='+encodeURIComponent(CFG.X_HANDLE);$('#fdesc').textContent='Follow @'+CFG.X_HANDLE+' for launch news and the season start.';bF.addEventListener('click',()=>{setTimeout(()=>{LS.set('followed','1');refresh()},1200)})}
+const bF=$('#bFollow');$('#xIn').value=LS.get('xh')||'';$('#xIn').addEventListener('input',()=>{LS.set('xh',$('#xIn').value.trim());refresh()});
+if(CFG.X_HANDLE){bF.href='https://x.com/intent/follow?screen_name='+encodeURIComponent(CFG.X_HANDLE);$('#fdesc').textContent='Follow @'+CFG.X_HANDLE+' and enter your handle. It is checked in step three.';bF.addEventListener('click',()=>{setTimeout(()=>{LS.set('followed','1');refresh()},1200)})}
 else{bF.removeAttribute('href');bF.setAttribute('aria-disabled','true');bF.textContent='Soon';$('#fdesc').textContent='The official account is revealed shortly. This step unlocks with it.'}
 // sign step
 const bS=$('#bSign');const chip=$('#chip');
@@ -123,22 +132,31 @@ function countTo(el,v,d,pad){const t0=performance.now(),dur=RM?0:2200;const go=(
 const b64=u8=>{let s='';for(const x of u8)s+=String.fromCharCode(x);return btoa(s)};
 async function api(path,opt){const r=await fetch(API+path,Object.assign({headers:{'content-type':'application/json'}},opt||{}));const j=await r.json().catch(()=>({}));if(!r.ok&&!j.claimed)throw new Error(j.error||'Request failed.');return j}
 bS.addEventListener('click',async()=>{if(state.full&&!state.claim){msg('All free planets have been claimed.','err');return}
- if(CFG.X_HANDLE&&LS.get('followed')!=='1'){msg('Follow on X first, then connect your wallet.','err');steps.follow.animate([{transform:'translateX(0)'},{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'translateX(0)'}],{duration:380});return}
+ if(!hasHandle()){msg('Enter your X handle first.','err');steps.follow.animate([{transform:'translateX(0)'},{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'translateX(0)'}],{duration:380});return}
  if(!window.__wallets){msg('Wallet support failed to load. Reload the page.','err');return}
  try{let w=window.__wallets.current();if(!w){msg('Choose a wallet to continue.');w=await window.__wallets.pick();if(!w){msg('');return}}
   state.wallet=w.address;
-  if(!API){showPlanet(w.address,false);bS.textContent='Claims open soon';bS.setAttribute('aria-disabled','true');$('#sdesc').textContent='Wallet connected. This is a preview of your world. Signing opens with the claim window.';msg('Preview generated from '+short(w.address)+'.','ok');return}
+  if(!API){showPlanet(w.address,false);bS.textContent='Claims open soon';bS.setAttribute('aria-disabled','true');msg('Preview generated from '+short(w.address)+'.','ok');return}
   bS.classList.add('busy');msg('Checking your wallet.');
-  const me=await api('/api/me?wallet='+encodeURIComponent(w.address));if(me.claimed){state.claim=me;showPlanet(w.address,true,me.no);refresh();msg('Welcome back. Your planet is already claimed.','ok');return}
+  const me=await api('/api/me?wallet='+encodeURIComponent(w.address));if(me.status==='final'||me.status==='reserved'){state.claim=me;showPlanet(w.address,true,me.no);refresh();msg(me.status==='final'?'Welcome back. Your planet is claimed.':'Welcome back. Your planet is reserved.','ok');return}
   const {message}=await api('/api/nonce',{method:'POST',body:JSON.stringify({wallet:w.address})});msg('Approve the signature in your wallet. No transaction, no fee.');
   const sig=await w.signMessage(new TextEncoder().encode(message));
   msg('Verifying signature.');const c=await api('/api/claim',{method:'POST',body:JSON.stringify({wallet:w.address,signature:b64(new Uint8Array(sig)),ref:LS.get('ref')||'',followed:LS.get('followed')==='1'})});
+  showPlanet(w.address,false);
+  if(c.status==='signed'){state.token=c.token;state.replyCode=c.replyCode;refresh();msg(state.cfg&&state.cfg.tweetId?'Signed. Now repost, like and reply, then press Verify.':'Signed. Claim opens when the announcement post is live.','ok');return}
   state.claim=c;showPlanet(w.address,true,c.no);refresh();msg('Planet claimed. Welcome to Season 01.','ok');loadStats()}
  catch(e){msg((e&&e.message)||'Something went wrong. Try again.','err')}finally{bS.classList.remove('busy')}});
+$('#bVerify').addEventListener('click',async()=>{if(!state.token){msg('Connect and sign with your wallet first.','err');return}const b=$('#bVerify');b.classList.add('busy');msg('Checking X.');
+ try{const r=await fetch(API+'/api/x/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({wallet:state.wallet,token:state.token,handle:$('#xIn').value.trim()})});const j=await r.json().catch(()=>({}));
+  state.tasks=j.tasks||state.tasks;if(!r.ok){refresh();msg(j.error||'Check failed. Try again.','err');return}
+  if(!j.ready){refresh();const miss=['follow','repost','like','reply'].filter(k=>state.cfg.req[k]&&!state.tasks[k]);msg('Not found yet: '+miss.join(', ')+'. X can take a minute to update.','err');return}
+  state.claim=j;state.token=null;showPlanet(state.wallet,true,j.no);refresh();loadStats();msg(j.status==='final'?'Planet claimed. Welcome to Season 01.':'Planet reserved. Invite a friend to make it final.','ok')}
+ catch(e){msg('Check failed. Try again.','err')}finally{b.classList.remove('busy')}});
+$('#bShare').addEventListener('click',()=>{const p=planet||{};const t='My Goldilocks planet is '+(p.name||'forming')+', '+(p.cls?(/^[AEIOU]/.test(p.cls)?'an ':'a ')+p.cls.toLowerCase():'a new world')+'. Season 01 starts soon.';window.open('https://x.com/intent/post?text='+encodeURIComponent(t),'_blank','noopener')});
 $('#bCopy').addEventListener('click',async()=>{const v=$('#refIn').value;if(!v)return;try{await navigator.clipboard.writeText(v)}catch(e){$('#refIn').select();document.execCommand('copy')}const b=$('#bCopy');b.textContent='Copied';b.classList.add('primary');setTimeout(()=>{b.textContent='Copy';b.classList.remove('primary')},1600)});
 // counter + board
 function setTotal(n){const s=String(n).padStart(6,'0');const i=s.search(/[1-9]/);const el=$('#tot');el.innerHTML='';[...s].forEach((ch,k)=>{const sp=document.createElement('span');sp.textContent=ch;if(i<0||k<i)sp.className='z';el.appendChild(sp)})}
-async function loadStats(){if(!API){setTotal(0);return}try{const s=await api('/api/stats');let c=0;const t0=performance.now();const go=()=>{const k=Math.min(1,(performance.now()-t0)/1400);setTotal(Math.round(s.total*(1-Math.pow(1-k,3))));if(k<1)requestAnimationFrame(go)};go();
+async function loadStats(){if(!API){setTotal(0);return}try{const s=await api('/api/stats');state.cfg=s;refresh();let c=0;const t0=performance.now();const go=()=>{const k=Math.min(1,(performance.now()-t0)/1400);setTotal(Math.round(s.total*(1-Math.pow(1-k,3))));if(k<1)requestAnimationFrame(go)};go();
  const left=s.max?Math.max(0,s.max-s.total):null;state.full=left===0;$('#totSub').textContent=left===null?'Worlds formed so far this season.':left?left+' of '+s.max+' free planets left.':'All '+s.max+' free planets have been claimed. Holding $GOLDILOCKS at launch still spawns a planet.';if(API){chip.querySelector('em').textContent=left===null?'Claims live':left?left+' of '+s.max+' left':'Claims closed'}if(state.full&&!state.claim){bS.textContent='All claimed';bS.setAttribute('aria-disabled','true');$('#sdesc').textContent='All free planets have been claimed. Holding $GOLDILOCKS at launch still spawns a planet.'}const lb=$('#lb');if(s.top&&s.top.length){lb.innerHTML='';s.top.forEach(x=>{const li=document.createElement('li');const a=document.createElement('span');a.textContent=x.wallet;const b=document.createElement('b');b.textContent=x.invites+' invited';li.append(a,b);lb.appendChild(li)})}}catch(e){$('#totSub').textContent='Live count unavailable right now.'}}
 setTotal(0);loadStats();if(API)setInterval(loadStats,30000);
 refresh();

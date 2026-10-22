@@ -6,7 +6,7 @@ function create(db,save,opts={}){
   const S=db.game=db.game||{planets:{},snaps:{},tick:-1,burnSigs:{},burnPool:0,carry:{},jackpot:0,epochs:[],lifeWinner:null,lifeAwarded:false,freeBurns:{},supply:null,lastSnap:null};
   const ensure=(w,src)=>{let p=S.planets[w];if(!p){p=S.planets[w]=G.newPlanet(w,src,now());}else if(src==='free'&&p.src!=='free')p.src='free';return p;};
   // Free claimed planets.
-  function syncClaims(){for(const w in db.claims)ensure(w,'free');}
+  function syncClaims(){for(const w in db.claims){const st=db.claims[w].status;if(!st||st==='final')ensure(w,'free');}}
   // Holder snapshot: balances map {owner:raw}. Holding for a tick is the minimum across snapshots in that tick.
   function snapshot(bal,supply){const t=now();S.supply=String(supply);S.lastSnap=t;
     for(const w of new Set([...Object.keys(bal),...Object.keys(S.snaps)])){const b=BigInt(bal[w]||0);const prev=S.snaps[w];S.snaps[w]=prev==null?String(b):String(b<BigInt(prev)?b:BigInt(prev));}

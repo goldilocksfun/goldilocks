@@ -15,19 +15,31 @@ const NONCE_TTL=10*60e3;
 fs.mkdirSync(path.dirname(DATA),{recursive:true});
 // One-off wipe (for clearing test data): set PURGE_ON_START=1 for a single boot, then remove it.
 if(process.env.PURGE_ON_START==='1'){try{fs.unlinkSync(DATA);console.log('store purged');}catch(e){}}
-let db={claims:{},codes:{},seq:0};try{db=Object.assign(db,JSON.parse(fs.readFileSync(DATA,'utf8')));}catch(e){}
+let db={claims:{},codes:{},seq:0,pending:{},xids:{},cfg:{}};try{db=Object.assign(db,JSON.parse(fs.readFileSync(DATA,'utf8')));}catch(e){}
 let dirty=false;const save=()=>{dirty=true;};
 setInterval(()=>{if(!dirty)return;dirty=false;const tmp=DATA+'.tmp';fs.writeFileSync(tmp,JSON.stringify(db));fs.renameSync(tmp,DATA);},1000).unref();
 const flush=()=>{try{fs.writeFileSync(DATA,JSON.stringify(db));}catch(e){}};process.on('SIGTERM',()=>{flush();process.exit(0);});process.on('SIGINT',()=>{flush();process.exit(0);});
 
+// ---------- claim requirements (each toggleable) ----------
+const on=(k,d)=>process.env[k]==null||process.env[k]===''?d:process.env[k]!=='0';
+const REQ={follow:on('REQ_FOLLOW',true),repost:on('REQ_REPOST',true),like:on('REQ_LIKE',true),reply:on('REQ_REPLY',true),invites:process.env.REQ_INVITES!=null&&process.env.REQ_INVITES!==''?+process.env.REQ_INVITES:1,
+  minAgeDays:+process.env.INVITE_MIN_AGE_DAYS||30,minFollowers:process.env.INVITE_MIN_FOLLOWERS!=null?+process.env.INVITE_MIN_FOLLOWERS:10,holdMs:+process.env.RESERVE_HOLD_MS||48*3600e3,holds:on('RESERVE_HOLDS',true),official:process.env.X_OFFICIAL||'playgoldilocks'};
+const xTasksOn=()=>REQ.follow||REQ.repost||REQ.like||REQ.reply;
+const gated=()=>xTasksOn()||REQ.invites>0;
+const tweetId=()=>(db.cfg&&db.cfg.tweetId)||process.env.CLAIM_TWEET_ID||'';
 // ---------- helpers ----------
 const isWallet=w=>{try{return typeof w==='string'&&w.length>=32&&w.length<=44&&bs58.decode(w).length===32;}catch(e){return false;}};
 const newCode=()=>{let c;do{c=crypto.randomBytes(5).toString('base64url').replace(/[-_]/g,'x').slice(0,7).toUpperCase();}while(db.codes[c]);return c;};
 const nonces=new Map();
 function message(wallet,nonce,iat){return `${DOMAIN} wants you to claim a free Goldilocks planet.\n\nWallet: ${wallet}\nNonce: ${nonce}\nIssued at: ${iat}\n\nThis is a signature only. No transaction, no fee, no funds move.`;}
 function verify(wallet,msg,sigB64){try{const sig=Buffer.from(String(sigB64||''),'base64');if(sig.length!==64)return false;return nacl.sign.detached.verify(new TextEncoder().encode(msg),new Uint8Array(sig),bs58.decode(wallet));}catch(e){return false;}}
-const view=w=>{const c=db.claims[w];if(!c)return {claimed:false};return {claimed:true,no:c.no,seed:c.seed,code:c.code,invites:c.invites||0,followed:!!c.followed,at:c.at};};
-const stats=()=>({open:OPEN,total:db.seq,max:MAX||null,top:Object.values(db.claims).filter(c=>c.invites>0).sort((a,b)=>b.invites-a.invites||a.no-b.no).slice(0,10).map(c=>({wallet:c.wallet.slice(0,4)+'..'+c.wallet.slice(-4),invites:c.invites,no:c.no}))});
+const view=w=>{const c=db.claims[w];if(!c){const p=db.pending&&db.pending[w];return p?{claimed:false,status:'signed',replyCode:p.replyCode,x:p.x||null}:{claimed:false};}
+  const st=c.status||'final';return {claimed:st==='final',status:st,no:c.no,seed:c.seed,code:c.code,invites:c.invites||0,qualifiedInvites:c.qinv||0,invitesNeeded:REQ.invites,reservedAt:c.reservedAt||null,holdUntil:c.reservedAt?c.reservedAt+REQ.holdMs:null,x:c.xHandle?'@'+c.xHandle:null,followed:!!c.followed,at:c.at};};
+const activeHolds=()=>REQ.holds?Object.values(db.claims).filter(c=>c.status==='reserved'&&Date.now()-c.reservedAt<REQ.holdMs).length:0;
+function finalize(c){if(c.status!=='reserved')return false;if(MAX&&db.seq>=MAX)return false;db.seq++;c.no=db.seq;c.status='final';c.finalAt=Date.now();return true;}
+function creditInviter(c){if(!c.by||c.credited)return;const r=db.claims[c.by];if(!r)return;const q=c.xq||{};
+  if(q.ageDays>=REQ.minAgeDays&&q.followers>=REQ.minFollowers&&c.xId&&c.xId!==r.xId){r.qinv=(r.qinv||0)+1;c.credited=true;if(r.status==='reserved'&&r.qinv>=REQ.invites)finalize(r);}}
+const stats=()=>({open:OPEN,total:db.seq,reserved:Object.values(db.claims).filter(c=>c.status==='reserved').length,max:MAX||null,tweetId:tweetId()||null,req:{follow:REQ.follow,repost:REQ.repost,like:REQ.like,reply:REQ.reply,invites:REQ.invites},official:REQ.official,top:Object.values(db.claims).filter(c=>c.invites>0).sort((a,b)=>b.invites-a.invites||(a.no||1e9)-(b.no||1e9)).slice(0,10).map(c=>({wallet:c.wallet.slice(0,4)+'..'+c.wallet.slice(-4),invites:c.invites,no:c.no}))});
 
 // ---------- rate limit (sliding window per IP and bucket) ----------
 const rl=new Map();
@@ -65,12 +77,15 @@ const server=http.createServer(async(req,res)=>{
       const n=nonces.get(wallet);if(!n||Date.now()-n.at>NONCE_TTL)return send(req,res,400,{error:'Signature request expired. Try again.'});
       if(!verify(wallet,n.msg,signature))return send(req,res,401,{error:'Signature could not be verified.'});
       nonces.delete(wallet);
+      if(gated()){const pc=db.pending[wallet]||{wallet,replyCode:'GL-'+crypto.randomBytes(4).toString('hex').slice(0,5).toUpperCase(),ref:String(ref||'').toUpperCase(),at:Date.now()};pc.token=crypto.randomBytes(18).toString('base64url');db.pending[wallet]=pc;save();
+        return send(req,res,200,{claimed:false,status:'signed',token:pc.token,replyCode:pc.replyCode});}
       if(MAX&&db.seq>=MAX)return send(req,res,410,{error:'All planets for this season are claimed.'});
       const code=newCode();const rc=String(ref||'').toUpperCase();let by=null;
       const rw=db.codes[rc];if(rw&&rw!==wallet&&db.claims[rw]){by=rw;db.claims[rw].invites=(db.claims[rw].invites||0)+1;}
       db.seq++;db.claims[wallet]={wallet,no:db.seq,seed:crypto.createHash('sha256').update(wallet).digest('hex').slice(0,16),code,by,followed:!!followed,invites:0,at:new Date().toISOString(),ip:crypto.createHash('sha256').update(ip+DOMAIN).digest('hex').slice(0,12)};
       db.codes[code]=wallet;save();
       return send(req,res,200,view(wallet));}
+    if(await claimRoute(req,res,u,p,ip)!==false)return;
     if(await gameRoute(req,res,u,p,ip)!==false)return;
     send(req,res,404,{error:'Not found.'});
   }catch(e){send(req,res,400,{error:e.message||'Bad request.'});}
@@ -125,4 +140,33 @@ async function gameRoute(req,res,u,p,ip){
     if(p==='/api/admin/retry'){const e=E.S.epochs.find(x=>x.idx===b.idx);if(!e)return send(req,res,404,{});await E.execute(e,GCFG.payoutMode==='devnet'&&GCFG.cluster!=='mainnet-beta'?'devnet':'dry',(w,l)=>chain.transfer(treasury,w,l));return send(req,res,200,e);}
   }
   return false;}
-module.exports={server,message,verify,db,E};
+
+// ---------- X tasks, reservation and invites ----------
+const X=require('./lib/xverify');
+async function claimRoute(req,res,u,p,ip){
+  if(p==='/api/x/verify'&&req.method==='POST'){if(limited(ip,'xv',12,600e3))return send(req,res,429,{error:'Too many checks. Wait a few minutes.'});
+    const {wallet,token,handle}=await body(req);const pc=db.pending[wallet];if(!pc||pc.token!==token)return send(req,res,401,{error:'Connect and sign with your wallet first.'});
+    const h=String(handle||'').replace(/^@/,'').trim();if(!/^[A-Za-z0-9_]{1,15}$/.test(h))return send(req,res,400,{error:'Enter your X handle.'});
+    const tid=tweetId();if((REQ.repost||REQ.like||REQ.reply)&&!tid)return send(req,res,409,{error:'Claim opens when the announcement post is live.'});
+    let usr;try{usr=await X.userByHandle(h);}catch(e){return send(req,res,e.code===404?404:503,{error:e.code===404?'That X account was not found.':'X checks are unavailable right now. Try again shortly.'});}
+    const owner=db.xids[usr.id];if(owner&&owner!==wallet)return send(req,res,409,{error:'This X account already holds a planet.'});
+    const t={};try{const off=await X.userByHandle(REQ.official);
+      if(REQ.follow)t.follow=await X.follows(usr.id,usr.username,off.id,REQ.official);
+      if(REQ.repost)t.repost=await X.reposted(usr.id,tid);
+      if(REQ.like){const l=await X.liked(usr.id,tid);t.like=l===null?true:l;if(l===null)t.likeUnverified=true;}
+      if(REQ.reply)t.reply=await X.replied(usr.username,tid,pc.replyCode);}
+    catch(e){return send(req,res,e.code===429?429:503,{error:e.code===429?e.message:'X checks are unavailable right now. Try again shortly.',tasks:t});}
+    pc.x='@'+usr.username;pc.tasks=t;save();
+    const ok=['follow','repost','like','reply'].every(k=>!REQ[k]||t[k]);if(!ok)return send(req,res,200,Object.assign(view(wallet),{tasks:t,ready:false}));
+    if(db.claims[wallet])return send(req,res,200,Object.assign(view(wallet),{tasks:t,ready:true}));
+    if(MAX&&db.seq+activeHolds()>=MAX)return send(req,res,410,{error:'All planets for this season are claimed or reserved.',tasks:t});
+    const code=newCode();const rw=db.codes[pc.ref];const by=rw&&rw!==wallet&&db.claims[rw]?rw:null;if(by)db.claims[by].invites=(db.claims[by].invites||0)+1;
+    const ageDays=(Date.now()-Date.parse(usr.createdAt))/864e5;
+    const c=db.claims[wallet]={wallet,no:null,status:'reserved',reservedAt:Date.now(),seed:crypto.createHash('sha256').update(wallet).digest('hex').slice(0,16),code,by,followed:!!t.follow,invites:0,qinv:0,
+      xId:usr.id,xHandle:usr.username.toLowerCase(),xq:{ageDays:Math.floor(ageDays),followers:usr.followers},tasks:t,at:new Date().toISOString(),ip:crypto.createHash('sha256').update(ip+DOMAIN).digest('hex').slice(0,12)};
+    db.codes[code]=wallet;db.xids[usr.id]=wallet;delete db.pending[wallet];
+    if(REQ.invites<=0)finalize(c);creditInviter(c);save();
+    return send(req,res,200,Object.assign(view(wallet),{tasks:t,ready:true}));}
+  if(p==='/api/admin/claimcfg'&&req.method==='POST'){if(!isAdmin(req))return send(req,res,403,{error:'Forbidden.'});const b=await body(req);db.cfg=db.cfg||{};if(b.tweetId!==undefined){if(b.tweetId&&!/^\d{5,25}$/.test(b.tweetId))return send(req,res,400,{error:'bad id'});db.cfg.tweetId=b.tweetId||'';}save();return send(req,res,200,{tweetId:tweetId()});}
+  return false;}
+module.exports={server,message,verify,db,E,X,REQ};
