@@ -1,0 +1,46 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Claim your free planet | Goldilocks</title>
+<link rel="preload" href="fonts/space-grotesk-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/instrument-serif-latin-400-italic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="icon" type="image/svg+xml" href="favicon.svg"><meta name="theme-color" content="#020308">
+<meta name="description" content="Season 01 pre-launch. Follow, invite and sign with your Solana wallet to claim a free planet. No transaction, no fee.">
+<meta property="og:type" content="website"><meta property="og:url" content="https://goldilockszone.fun/claim.html"><meta property="og:title" content="Claim your free planet | Goldilocks"><meta property="og:description" content="Every wallet is a world. Claim yours before Season 01 begins.">
+<meta property="og:image" content="https://goldilockszone.fun/assets/og.jpg"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Claim your free planet"><meta name="twitter:description" content="Every wallet is a world. Claim yours before Season 01 begins."><meta name="twitter:image" content="https://goldilockszone.fun/assets/og.jpg">
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="claim.css">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","three/addons/":"./vendor/jsm/"}}</script>
+</head><body class="cl">
+<canvas id="cgl" aria-hidden="true"></canvas><div class="cl-vig" aria-hidden="true"></div>
+<header class="nav"><a class="logo" href="index.html"><svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="14" class="ring"/><circle cx="20" cy="20" r="2.2" class="sun"/><g class="orb"><circle cx="34" cy="20" r="3.2" class="pl"/></g></svg>Goldilocks</a>
+<nav><a href="index.html" class="navlink">The system</a><span class="chip mono" id="chip"><i></i><em>Claims open soon</em></span></nav></header>
+<main class="cl-main">
+ <section class="cl-hero">
+  <div class="cl-copy">
+   <p class="kicker gold rv">Season 01 / Pre-launch</p>
+   <h1 class="rv">Claim your<br>free <span class="serif goldtxt">planet.</span></h1>
+   <p class="sub rv">Every wallet is a world. Complete three steps before Season 01 begins and a planet is generated from your wallet address, yours to steer into the habitable zone.</p>
+   <ol class="steps" id="steps">
+    <li class="step rv" data-s="follow"><span class="idx mono">01</span><div class="sx"><h3>Follow on X</h3><p id="fdesc">Follow the official account for launch news and the season start.</p></div><a class="sbtn" id="bFollow" target="_blank" rel="noopener" href="#">Follow</a><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M7 12.4l3.2 3.1L17 8.7"/></svg></span></li>
+    <li class="step rv" data-s="sign"><span class="idx mono">02</span><div class="sx"><h3>Connect and sign</h3><p id="sdesc">Phantom, Solflare or Backpack. A message signature only. No transaction, no fee, no funds move.</p></div><button class="sbtn" id="bSign">Connect wallet</button><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M7 12.4l3.2 3.1L17 8.7"/></svg></span></li>
+    <li class="step rv" data-s="invite"><span class="idx mono">03</span><div class="sx"><h3>Invite friends</h3><p id="idesc">Your personal link appears once your planet is claimed. Every friend who claims climbs you up the board.</p>
+      <div class="ref" id="ref"><input id="refIn" readonly aria-label="Your referral link" value=""><button class="sbtn sm" id="bCopy">Copy</button></div></div><span class="ibadge mono" id="ibadge"><b id="inv">0</b> invited</span><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M7 12.4l3.2 3.1L17 8.7"/></svg></span></li>
+   </ol>
+   <p class="msg mono" id="msg" role="status" aria-live="polite"></p>
+  </div>
+  <aside class="pcard" id="pcard" aria-live="polite">
+   <div class="pc-top mono"><span id="pName">Unformed</span><span class="dim" id="pState">Awaiting wallet</span></div>
+   <div class="pc-grid">
+    <div><span>Class</span><b id="pClass">Protoplanet</b></div>
+    <div><span>Orbit</span><b><em id="pAu">0.00</em> AU</b></div>
+    <div><span>Surface</span><b><em id="pK">000</em> K</b></div>
+    <div><span>Similarity</span><b><em id="pEsi">0.00</em> ESI</b></div>
+   </div>
+   <div class="pc-bot mono dim"><span id="pWallet">Seeded from your wallet address</span><span id="pNo"></span></div>
+  </aside>
+ </section>
+ <section class="cl-board">
+  <div class="tot rv"><p class="kicker">Planets claimed</p><div class="tnum" id="tot">000000</div><p class="sub" id="totSub">The counter goes live when claims open.</p></div>
+  <div class="lb rv"><p class="kicker">Top inviters</p><ol id="lb"><li class="empty">The board fills as invitations land.</li></ol></div>
+ </section>
+</main>
+<footer class="cl-foot mono dim"><span>Signing proves wallet ownership only. Goldilocks never asks for a transaction or a seed phrase.</span><span>Solana / Season 01</span></footer>
+<script src="config.js"></script><script src="wallet.js"></script><script type="module" src="claim.js"></script></body></html>

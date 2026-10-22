@@ -24,7 +24,7 @@ $$('.split').forEach(el=>{let i=0;const walk=n=>{[...n.childNodes].forEach(ch=>{
 const lenis=new Lenis({duration:RM?0:1.35,smoothTouch:false,lerp:RM?1:.1,easing:t=>Math.min(1,1.001-Math.pow(2,-10*t)),smoothWheel:true});window.__lenis=lenis;
 lenis.on('scroll',ScrollTrigger.update);gsap.ticker.add(t=>lenis.raf(t*1000));gsap.ticker.lagSmoothing(0);
 $$('a[href^="#"]').forEach(a=>a.addEventListener('click',e=>{const h=a.getAttribute('href');if(h.length>1){e.preventDefault();lenis.scrollTo(h,{duration:2})}}));
-$$('.sec-head,.cta').forEach(el=>ScrollTrigger.create({trigger:el,start:'top 80%',onEnter:()=>el.classList.add('in')}));
+$$('.sec-head,.cta,.claimcta').forEach(el=>ScrollTrigger.create({trigger:el,start:'top 80%',onEnter:()=>el.classList.add('in')}));
 
 /* ---------- cursor ---------- */
 const cur=$('#cur'),dot=$('#cur-dot');let mx=innerWidth/2,my=innerHeight/2,cx=mx,cy=my,nmx=0,nmy=0;

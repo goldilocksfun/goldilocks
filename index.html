@@ -5,9 +5,9 @@
 <link rel="icon" type="image/svg+xml" href="favicon.svg"><meta name="theme-color" content="#020308">
 <meta name="description" content="A live planet formation simulation on Solana. Every wallet is a world. Only the habitable earn.">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-<meta property="og:type" content="website"><meta property="og:url" content="https://goldilocksfun.github.io/goldilocks/"><meta property="og:title" content="Goldilocks | Only the habitable survive"><meta property="og:description" content="A live planet formation simulation on Solana. Every wallet is a world.">
-<meta property="og:image" content="https://goldilocksfun.github.io/goldilocks/assets/og.jpg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
-<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Goldilocks"><meta name="twitter:description" content="Every wallet is a world. Only the habitable earn."><meta name="twitter:image" content="https://goldilocksfun.github.io/goldilocks/assets/og.jpg"><link rel="stylesheet" href="style.css">
+<meta property="og:type" content="website"><meta property="og:url" content="https://goldilockszone.fun/"><meta property="og:title" content="Goldilocks | Only the habitable survive"><meta property="og:description" content="A live planet formation simulation on Solana. Every wallet is a world.">
+<meta property="og:image" content="https://goldilockszone.fun/assets/og.jpg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Goldilocks"><meta name="twitter:description" content="Every wallet is a world. Only the habitable earn."><meta name="twitter:image" content="https://goldilockszone.fun/assets/og.jpg"><link rel="stylesheet" href="style.css">
 <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","three/addons/":"./vendor/jsm/"}}</script>
 </head><body class="loading">
 <div id="loader"><div class="l-top"><span>GOLDILOCKS</span><span>SEASON 01</span></div><div class="l-mid"><div class="l-num"><span id="lnum">000</span></div><svg class="l-orb" viewBox="0 0 200 200"><circle cx="100" cy="100" r="80"/><circle cx="100" cy="100" r="52" class="z"/><circle cx="100" cy="100" r="6" class="s"/><g><circle cx="180" cy="100" r="3.5" class="p"/></g></svg></div><div class="l-bar"><i id="lbar"></i></div><button id="lenter" class="l-enter" data-h><span>Enter</span><i></i></button><div class="l-bot"><span id="lstage">Seeding molecular cloud</span><span>G2V / 5778 K</span></div></div>
@@ -16,7 +16,7 @@
 <div class="crops" aria-hidden="true"><b class="tl"></b><b class="tr"></b><b class="bl"></b><b class="br"></b></div>
 <div class="lbx" aria-hidden="true"><i></i><i></i></div><div id="cur"><i></i></div><div id="cur-dot"></div>
 <header class="nav"><a class="logo" href="#"><svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="14" class="ring"/><circle cx="20" cy="20" r="2.2" class="sun"/><g class="orb"><circle cx="34" cy="20" r="3.2" class="pl"/></g></svg>Goldilocks</a>
-<nav><a href="#actions" data-h>Actions</a><a href="#sim" data-h>Live system</a><button id="snd" class="on" data-h aria-label="Sound"><audio id="theme" loop preload="none"></audio><span class="eq"><i></i><i></i><i></i><i></i></span><em>Sound on</em></button><a href="#join" class="pill" data-h>Enter season</a></nav></header>
+<nav><a href="#actions" data-h>Actions</a><a href="#sim" data-h>Live system</a><a href="claim.html" data-h>Free planet</a><button id="snd" class="on" data-h aria-label="Sound"><audio id="theme" loop preload="none"></audio><span class="eq"><i></i><i></i><i></i><i></i></span><em>Sound on</em></button><a href="#join" class="pill" data-h>Enter season</a></nav></header>
 <div class="hud">
  <div class="hud-l"><span class="mono dim">CH</span><span id="chap" class="mono">00</span><span id="chapname" class="mono">Nebula</span><div class="bar"><i id="prog"></i><s style="left:11%"></s><s style="left:24%"></s><s style="left:38%"></s><s style="left:51%"></s><s style="left:64%"></s><s style="left:87%"></s></div></div>
  <div class="hud-r" id="readout">
@@ -57,6 +57,17 @@
   <div class="simtag mono dim">Newtonian n body / dt 0.004</div></div>
 </section>
 
+<section id="claim" class="flat claimcta">
+ <div class="cc-in">
+  <div class="cc-copy"><p class="kicker gold">Pre-launch / Free planet</p><h2 class="split">Claim a world <span class="serif goldtxt">for free.</span></h2><p class="sub">Before Season 01 begins, every wallet that completes three steps receives a planet generated from its own address.</p>
+   <a class="pill big" href="claim.html" data-h>Claim your planet</a></div>
+  <ol class="cc-steps">
+   <li><span class="mono">01</span><div><h3>Follow on X</h3><p>Stay on the launch signal.</p></div></li>
+   <li><span class="mono">02</span><div><h3>Connect and sign</h3><p>Phantom, Solflare or Backpack. A signature only, no transaction, no fee.</p></div></li>
+   <li><span class="mono">03</span><div><h3>Invite friends</h3><p>A personal link. Every friend who claims lifts your rank.</p></div></li>
+  </ol>
+ </div>
+</section>
 <section id="join" class="flat cta">
  <svg class="orbitsvg" viewBox="0 0 800 800" aria-hidden="true"><circle cx="400" cy="400" r="250"/><circle cx="400" cy="400" r="330" class="hz"/><circle cx="400" cy="400" r="390"/><g class="spin"><circle cx="730" cy="400" r="7" class="pl"/></g><circle cx="400" cy="400" r="18" class="sun"/></svg>
  <p class="kicker gold">Season 01 / Fourteen days</p><h2 class="split huge">Find your <span class="serif">orbit.</span></h2><p class="sub">One star. One zone. One living world.</p><a class="pill big" href="#join" data-h>Enter season 01</a></section>
