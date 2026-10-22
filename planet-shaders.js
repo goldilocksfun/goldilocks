@@ -18,8 +18,8 @@ vec3 deep=vec3(.01,.06,.2),shal=vec3(.03,.28,.45);vec3 oc=mix(deep,shal,smoothst
 float veg=life*smoothstep(sea,sea+.06,h)*smoothstep(.45,.15,h)*smoothstep(-.2,.3,snoise(p*4.+seed*2.));vec3 land=mix(col,vec3(.07,.24,.08),veg*.9);
 col=mix(land,oc,isSea);float cap=smoothstep(.78,.9,abs(p.y)+snoise(p*6.)*.05)*ice;col=mix(col,vec3(.92,.95,1.),cap);
 float ndl=dot(N,L);float day=smoothstep(-.12,.35,ndl);if(cshadow>0.){vec3 sp=normalize(p+L*.04);vec3 q=sp*3.2;q+=vec3(fbm3(sp*2.+t*.015),fbm3(sp*2.+5.2-t*.012),0.)*.6;q.x+=t*.02*(1.-abs(sp.y));float cs=smoothstep(.05,.45,fbm3(q));day*=1.-cs*cshadow*.45;}vec3 H=normalize(L+V);float spec=(pow(max(dot(N,H),0.),90.)*1.2+pow(max(dot(N,H),0.),12.)*.12)*isSea*day;
-vec3 lit=col*(day*.95+.012)+vec3(1.,.9,.75)*spec;float term=smoothstep(-.15,.05,ndl)*smoothstep(.25,.05,ndl);lit+=vec3(.6,.25,.08)*term*.25*water;
-float city=step(.72,snoise(p*38.+seed))*smoothstep(sea+.02,sea+.1,h)*(1.-isSea)*life*life;lit+=vec3(1.,.7,.35)*city*(1.-smoothstep(-.2,.05,ndl))*1.8;
+vec3 lit=col*(day*.95+.022*smoothstep(-1.,.2,ndl)+.008)+vec3(1.,.9,.75)*spec;float term=smoothstep(-.15,.05,ndl)*smoothstep(.25,.05,ndl);lit+=vec3(.6,.25,.08)*term*.25*water;
+float city=smoothstep(.45,.85,snoise(p*16.+seed))*smoothstep(.1,.5,snoise(p*4.+seed*1.3))*smoothstep(sea+.02,sea+.1,h)*(1.-isSea)*life*life;lit+=vec3(1.,.7,.35)*city*(1.-smoothstep(-.2,.05,ndl))*.9;
 float fr=pow(1.-max(dot(N,V),0.),3.);vec3 scat=mix(vec3(1.,.45,.2),mix(vec3(.3,.6,1.),vec3(.4,.95,.85),life*.3),smoothstep(-.05,.35,ndl));lit+=scat*fr*water*smoothstep(-.3,.4,ndl)*1.5;lit=mix(lit,lit*vec3(.85,.95,1.15),fr*water*.5);
 gl_FragColor=vec4(lit,1.);}`;
 export {NOISE,planetVS,planetFS};

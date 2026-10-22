@@ -156,7 +156,7 @@ function frame(now){requestAnimationFrame(frame);if(document.hidden)return;const
  const k=1-Math.exp(-dt*7);S.th+=(S.tth-S.th)*k;S.ph+=(S.tph-S.ph)*k;const kf=FLY?1-Math.exp(-dt*2.6):k*.9;S.ld+=(S.tld-S.ld)*kf;if(FLY&&Math.abs(S.tld-S.ld)<.03&&S.off.lengthSq()<1e-10)FLY=0;
  if(PLAY&&!VIEW)U.t.value+=dt*.02*SPD;
  if(S.follow){posOf(S.follow,U.t.value,tmp);S.off.multiplyScalar(Math.exp(-dt*(FLY?2.4:5)));S.tgt.copy(tmp).add(S.off)}else S.tgt.multiplyScalar(1-Math.min(1,dt*3));
- const d=Math.exp(S.ld);const sp=Math.sin(S.ph);cam.position.set(S.tgt.x+d*sp*Math.cos(S.th),S.tgt.y+d*Math.cos(S.ph),S.tgt.z+d*sp*Math.sin(S.th));cam.lookAt(S.tgt);
+ const d=Math.exp(S.ld);const sp=Math.sin(S.ph);cam.position.set(S.tgt.x+d*sp*Math.cos(S.th),S.tgt.y+d*Math.cos(S.ph),S.tgt.z+d*sp*Math.sin(S.th));{const cl=cam.position.length(),mn=SR*1.5;if(cl<mn){cam.position.multiplyScalar(mn/Math.max(cl,1e-4));if(!S.follow)S.tld=Math.max(S.tld,Math.log(mn))}}cam.lookAt(S.tgt);
  VO+=((VIEW?1:0)-VO)*k;if(VO>.002)cam.setViewOffset(W,H,MOB?0:-W*.09*VO,MOB?H*.17*VO:0,W,H);else cam.clearViewOffset();
  cam.near=Math.max(d*.002,1e-6);cam.far=d<.08?6:Math.max(d*40,GR*4);cam.updateProjectionMatrix();
  const sys=1-Math.min(1,Math.max(0,(Math.log(d)-Math.log(300))/(Math.log(6000)-Math.log(300))));U.op.value=sys;const close=VIEW&&d<.06;hz.visible=sys>.01;realPts.visible=sys>.01&&!close;demoPts.visible=$('#demo').checked&&!close;dG.visible=!!(picked&&d<.3);if(dG.visible){posOf(picked,U.t.value,tmp);dG.position.copy(tmp);const tt=now/1000;pB.rotation.y=tt*D.rot;pC.rotation.y=tt*(D.rot*1.2+.004);pM.uniforms.t.value=cM.uniforms.t.value=tt;moonsM.forEach((m,i)=>{const o=D.mo[i];if(!o)return;const r=o.r,w=o.w,ph=i*2.1+D.seed;m.position.set(Math.cos(tt*w+ph)*r,Math.sin(tt*w+ph)*.35*r*.2,Math.sin(tt*w+ph)*r)})}ringLines.forEach(l=>l.material.opacity=.16*sys);sel.material.opacity=.75*sys*(close?.25:1);mk.material.opacity=1;if(VIEW)mk.visible=false;
@@ -171,3 +171,7 @@ function frame(now){requestAnimationFrame(frame);if(document.hidden)return;const
  renderer.render(scene,cam)}
 addEventListener('resize',size,{passive:true});size();$('#hint').textContent=HINT;loadReal().finally(()=>{const w=new URLSearchParams(location.search).get('w');if(w&&/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)){$('#sq').value=w;$('#sf').requestSubmit()}});requestAnimationFrame(frame);
 window.__orbits={S,setPlay,exitPlanet,get demo(){return demo},select,get real(){return real},demoOn:()=>{$('#demo').click()}};
+
+// Pre-warm every shader program and buffer (close-up planet, rings, moons, sun LOD) so the first fly-in has no compile hitch.
+{const warm=()=>{try{const st=[];scene.traverse(o=>{st.push([o,o.visible]);o.visible=true});renderer.compile(scene,cam);const rt=new THREE.WebGLRenderTarget(32,32);renderer.setRenderTarget(rt);renderer.render(scene,cam);renderer.setRenderTarget(null);rt.dispose();st.forEach(([o,v])=>o.visible=v)}catch(e){}};
+ if(document.readyState==='complete')setTimeout(warm,300);else addEventListener('load',()=>setTimeout(warm,300),{once:true})}

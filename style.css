@@ -223,3 +223,10 @@ footer .links{display:flex;gap:10px}
 .lbx{display:none!important}
 .w{padding:0 .1em .24em;margin:0 -.1em -.24em}
 .panel.snap .c,.panel.snap .kicker,.panel.snap .sub,.panel.snap .meters{transition:none!important}
+
+/* v12: symmetric line reveal without overflow clip */
+.w{overflow:visible!important}
+.c{transform:translateY(.35em);opacity:0;transition:transform .8s var(--ease),opacity .55s var(--ease)}
+.panel.in .c,.sec-head.in .c,.cta.in .c{transform:none;opacity:1}
+.panel.out .c{transform:translateY(-.25em);opacity:0;transition:transform .3s ease-in,opacity .25s ease-in;transition-delay:0s!important}
+.panel:not(.in) .kicker,.panel:not(.in) .sub,.panel:not(.in) .meters{transition-duration:.25s;transition-delay:0s}
