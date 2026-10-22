@@ -4,6 +4,7 @@ import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
 import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
 import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
 import {NOISE,planetVS,planetFS} from './planet-shaders.js';
+import {planetType,FSX,typeUniforms,applyType} from './planets.js';
 import {createSky} from './sky.js';
 const CFG=Object.assign({API_BASE:'',X_HANDLE:''},window.CONFIG||{});const API=String(CFG.API_BASE||'').replace(/\/+$/,'');
 const $=s=>document.querySelector(s);const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;if(RM)document.documentElement.classList.add('rm');
@@ -12,17 +13,7 @@ const LS={get:k=>{try{return localStorage.getItem('gl_'+k)}catch(e){return null}
 /* ---------- seeded planet ---------- */
 function hash(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0}return h}
 function rng(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
-const KINDS=[
- {cls:'Ocean world',a:0x2c4a3a,b:0x6b7f4e,c:0xc8b88a,water:.78,ice:.5,life:.85,atm:0x4f9dff,cloud:1},
- {cls:'Verdant terra',a:0x2a4a2a,b:0x5d7a3c,c:0xb0a070,water:.55,ice:.3,life:1,atm:0x5fb6ff,cloud:.9},
- {cls:'Dune world',a:0x6a3a1e,b:0xb27a45,c:0xe7c48c,water:.14,ice:.15,life:.2,atm:0xffb070,cloud:.35},
- {cls:'Glacial world',a:0x6f7f96,b:0xb3c4d6,c:0xf2f6fa,water:.5,ice:1,life:.15,atm:0x9fd4ff,cloud:.7},
- {cls:'Volcanic world',a:0x24160f,b:0x5a2a1c,c:0xa8562c,water:.08,ice:0,life:0,atm:0xff7a3d,cloud:.25},
- {cls:'Archipelago',a:0x3a5a34,b:0x8a8a58,c:0xd8cfa0,water:.92,ice:.4,life:.7,atm:0x55c8ff,cloud:.85},
- {cls:'Gas giant',a:0x8a6a48,b:0xd8b88a,c:0xf3e2c0,water:0,ice:0,life:0,atm:0xffd49a,cloud:0,gas:1}];
-function planetFor(w){const r=rng(hash(w));const k=KINDS[Math.floor(r()*KINDS.length)];const tint=c=>new THREE.Color(c).offsetHSL((r()-.5)*.06,(r()-.5)*.12,(r()-.5)*.06);
- const au=.82+r()*.5,K=Math.round(278/Math.sqrt(au)*(1-k.water*.08)+(k.gas?-60:0));const esi=Math.max(.2,Math.min(.99,1-Math.abs(K-288)/220-(k.gas?.35:0)+k.life*.08));
- return{k,cls:k.cls,a:tint(k.a),b:tint(k.b),c:tint(k.c),seed:r()*60,au,K,esi,ring:k.gas?r()<.85:r()<.4,moon:r()<.75,tilt:(r()-.5)*.9,name:'GL '+(hash(w+'n')%9000+1000)+' '+'BCDFGHJKLMNPRSTVXZ'[Math.floor(r()*18)]}}
+function planetFor(w){const D=planetType(w);D.moon=D.moons>0;return D}
 
 /* ---------- renderer ---------- */
 const cv=$('#cgl');const DPR=Math.min(devicePixelRatio||1,innerWidth<760?1:1.5);
@@ -47,8 +38,8 @@ const sunG=new THREE.Mesh(new THREE.PlaneGeometry(60,60),new THREE.ShaderMateria
  fragmentShader:`varying vec2 vU;void main(){float r=length(vU);float a=exp(-r*7.)*1.6+exp(-r*2.4)*.18;gl_FragColor=vec4(vec3(1.,.78,.5)*a,1.);}`}));scene.add(sunG);
 
 // planet with dissolve-in
-const FS=planetFS.replace('uniform vec3 cA','uniform float form;uniform vec3 cA').replace(/gl_FragColor=vec4\(lit,1\.\);\}$/,'float dn=snoise(normalize(vP)*2.4+seed*.3)*.5+.5;float th=form*1.3-.15;if(dn>th)discard;float eg=smoothstep(th-.035,th,dn)*(1.-step(1.,form));lit+=vec3(1.,.68,.3)*eg*1.6;gl_FragColor=vec4(lit,1.);}');
-const pMat=new THREE.ShaderMaterial({uniforms:{cA:{value:new THREE.Color()},cB:{value:new THREE.Color()},cC:{value:new THREE.Color()},seed:{value:1},water:{value:0},life:{value:0},ice:{value:0},t:{value:0},gas:{value:0},cshadow:{value:.8},form:{value:0}},vertexShader:planetVS,fragmentShader:FS});
+const FS=FSX.replace('uniform vec3 cA','uniform float form;uniform vec3 cA').replace(/gl_FragColor=vec4\(lit,1\.\);\}$/,'float dn=snoise(normalize(vP)*2.4+seed*.3)*.5+.5;float th=form*1.3-.15;if(dn>th)discard;float eg=smoothstep(th-.035,th,dn)*(1.-step(1.,form));lit+=vec3(1.,.68,.3)*eg*1.6;gl_FragColor=vec4(lit,1.);}');
+const pMat=new THREE.ShaderMaterial({uniforms:{...typeUniforms(),cA:{value:new THREE.Color()},cB:{value:new THREE.Color()},cC:{value:new THREE.Color()},seed:{value:1},water:{value:0},life:{value:0},ice:{value:0},t:{value:0},gas:{value:0},cshadow:{value:.8},form:{value:0}},vertexShader:planetVS,fragmentShader:FS});
 const body=new THREE.Mesh(new THREE.SphereGeometry(1,160,160),pMat);const tiltG=new THREE.Group();sys.add(tiltG);tiltG.add(body);
 const cloudMat=new THREE.ShaderMaterial({uniforms:{t:{value:0},u:{value:0}},transparent:true,depthWrite:false,vertexShader:planetVS,
  fragmentShader:NOISE+`uniform float t,u;varying vec3 vP,vN,vW;void main(){vec3 p=normalize(vP);vec3 q=p*3.2;q+=vec3(fbm3(p*2.+t*.015),fbm3(p*2.+5.2-t*.012),0.)*.6;q.x+=t*.02*(1.-abs(p.y));float n=fbm(q);n+=snoise(p*14.+t*.03)*.08;float a=smoothstep(.05,.45,n)*u;vec3 L=normalize(-vW);float d=smoothstep(-.1,.4,dot(normalize(vN),L));gl_FragColor=vec4(vec3(.92)*(d*.9+.02),a*(.12+d*.62));}`});
@@ -60,7 +51,7 @@ const ringMat=new THREE.ShaderMaterial({transparent:true,side:THREE.DoubleSide,d
  fragmentShader:`uniform float u;uniform vec3 c;varying vec3 vP,vW;void main(){float r=length(vP.xy);float b=.55+.45*sin(r*46.)*sin(r*13.+1.);b*=.75+.25*sin(r*120.);float a=smoothstep(1.45,1.52,r)*smoothstep(2.35,2.2,r)*(1.-smoothstep(1.86,1.9,r)*smoothstep(1.95,1.91,r)*.8);
  vec3 L=normalize(-vW);float lit=.35+.65*max(dot(normalize(vec3(0.,0.,1.)),L)*.5+.5,0.);float rev=smoothstep(u*2.5-.3,u*2.5-.6,r-1.4);gl_FragColor=vec4(c*b*lit*.75,a*b*.6*(1.-rev)*step(.001,u));}`});
 const ring=new THREE.Mesh(new THREE.RingGeometry(1.4,2.4,256,1),ringMat);ring.rotation.x=-Math.PI/2+.28;tiltG.add(ring);
-const moonMat=new THREE.ShaderMaterial({uniforms:{cA:{value:new THREE.Color(0x8a8078)},cB:{value:new THREE.Color(0x6a645e)},cC:{value:new THREE.Color(0xd8d2ca)},seed:{value:4},water:{value:0},life:{value:0},ice:{value:0},t:{value:0},gas:{value:0},cshadow:{value:0},form:{value:0}},vertexShader:planetVS,fragmentShader:FS});
+const moonMat=new THREE.ShaderMaterial({uniforms:{...typeUniforms(),cA:{value:new THREE.Color(0x8a8078)},cB:{value:new THREE.Color(0x6a645e)},cC:{value:new THREE.Color(0xd8d2ca)},seed:{value:4},water:{value:0},life:{value:0},ice:{value:0},t:{value:0},gas:{value:0},cshadow:{value:0},form:{value:0}},vertexShader:planetVS,fragmentShader:FS});
 const moon=new THREE.Mesh(new THREE.SphereGeometry(.13,64,64),moonMat);sys.add(moon);
 // accretion dust (proto state) that collapses into the planet
 const DN=MOBILE()?2600:5200;function MOBILE(){return innerWidth<760}
@@ -81,7 +72,7 @@ const composer=new EffectComposer(renderer,new THREE.WebGLRenderTarget(innerWidt
 composer.addPass(new RenderPass(scene,camera));const bloom=new UnrealBloomPass(new THREE.Vector2(innerWidth/2,innerHeight/2),.55,.55,.9);composer.addPass(bloom);composer.addPass(new OutputPass());
 
 let planet=null;const S={form:0,formT:0,col:0,colT:0,ghost:1,shock:-1,mx:0,my:0};
-function applyPlanet(w){planet=planetFor(w);const u=pMat.uniforms;u.cA.value.copy(planet.a);u.cB.value.copy(planet.b);u.cC.value.copy(planet.c);u.seed.value=planet.seed;u.water.value=planet.k.water;u.ice.value=planet.k.ice;u.life.value=planet.k.life;u.gas.value=planet.k.gas||0;
+function applyPlanet(w){planet=planetFor(w);const u=pMat.uniforms;applyType(u,planet);u.cA.value.copy(planet.a);u.cB.value.copy(planet.b);u.cC.value.copy(planet.c);u.seed.value=planet.seed;u.water.value=planet.k.water;u.ice.value=planet.k.ice;u.life.value=planet.k.life;u.gas.value=planet.k.gas||0;
  atmMat.uniforms.c.value.set(planet.k.atm);tiltG.rotation.z=planet.tilt;ring.visible=planet.ring;moon.visible=planet.moon;moonMat.uniforms.seed.value=planet.seed+3}
 function materialize(){if(!planet)return;if(innerWidth<1000&&scrollY>40)scrollTo({top:0,behavior:RM?'auto':'smooth'});S.colT=1;setTimeout(()=>{S.formT=1;S.shock=0},RM?0:1300)}
 
@@ -126,7 +117,7 @@ else{bF.removeAttribute('href');bF.setAttribute('aria-disabled','true');bF.textC
 const bS=$('#bSign');const chip=$('#chip');
 if(API){chip.classList.add('live');chip.querySelector('em').textContent='Claims live'}
 const short=w=>w.slice(0,4)+'..'+w.slice(-4);
-function showPlanet(w,claimed,no){applyPlanet(w);const p=planet;$('#pName').textContent=p.name;$('#pClass').textContent=p.cls;$('#pState').textContent=claimed?'Claimed':'Preview';$('#pWallet').textContent=short(w);$('#pNo').textContent=no?'No. '+String(no).padStart(5,'0'):'';
+function showPlanet(w,claimed,no){applyPlanet(w);const p=planet;$('#pName').textContent=p.name;$('#pClass').textContent=p.cls;{const t=[p.moons?p.moons+(p.moons>1?' moons':' moon'):'No moons',p.ringN>1?'Double rings':p.ring?'Rings':'No rings',p.rare.length?'Rare trait: '+p.rare.join(', '):''].filter(Boolean).join('. ')+'.';const el=$('#pTrait');el.textContent=t+' ';const a=document.createElement('a');a.href='orbits.html?w='+encodeURIComponent(w);a.textContent='See it in orbit';a.className='gold';el.appendChild(a)}$('#pState').textContent=claimed?'Claimed':'Preview';$('#pWallet').textContent=short(w);$('#pNo').textContent=no?'No. '+String(no).padStart(5,'0'):'';
  countTo($('#pAu'),p.au,2);countTo($('#pK'),p.K,0,3);countTo($('#pEsi'),p.esi,2);$('#pcard').classList.add('formed');materialize()}
 function countTo(el,v,d,pad){const t0=performance.now(),dur=RM?0:2200;const go=()=>{const k=Math.min(1,(performance.now()-t0)/Math.max(dur,1));const e=1-Math.pow(1-k,4);let s=(v*e).toFixed(d);if(pad)s=s.padStart(pad,'0');el.textContent=s;if(k<1)requestAnimationFrame(go)};go()}
 const b64=u8=>{let s='';for(const x of u8)s+=String.fromCharCode(x);return btoa(s)};

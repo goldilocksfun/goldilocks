@@ -1,34 +1,10 @@
 import * as THREE from 'three';
 import {NOISE,planetVS,planetFS} from './planet-shaders.js';
+import {hash,rng,planetType as detailFor,FSX,KINDS,HZI,HZO,typeUniforms,applyType} from './planets.js';
 const CFG=Object.assign({API_BASE:''},window.CONFIG||{});const API=String(CFG.API_BASE||'').replace(/\/+$/,'');
 const $=s=>document.querySelector(s);const MOB=innerWidth<820||matchMedia('(hover:none)').matches;const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
 /* deterministic planet params, same draws as the claim page */
-function hash(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0}return h}
-function rng(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
-const KINDS=[['Ocean world',.78,0,[.35,.6,.9]],['Verdant terra',.55,0,[.45,.75,.45]],['Dune world',.14,0,[.85,.6,.35]],['Glacial world',.5,0,[.8,.88,.95]],['Volcanic world',.08,0,[.85,.4,.25]],['Archipelago',.92,0,[.4,.75,.85]],['Gas giant',0,1,[.9,.78,.6]]];
-const HZI=.95,HZO=1.37;
-const CK=[{a:0x2c4a3a,b:0x6b7f4e,c:0xc8b88a,water:.78,ice:.5,life:.85,atm:0x4f9dff,cloud:1},{a:0x2a4a2a,b:0x5d7a3c,c:0xb0a070,water:.55,ice:.3,life:1,atm:0x5fb6ff,cloud:.9},{a:0x6a3a1e,b:0xb27a45,c:0xe7c48c,water:.14,ice:.15,life:.2,atm:0xffb070,cloud:.35},{a:0x6f7f96,b:0xb3c4d6,c:0xf2f6fa,water:.5,ice:1,life:.15,atm:0x9fd4ff,cloud:.7},{a:0x24160f,b:0x5a2a1c,c:0xa8562c,water:.08,ice:0,life:0,atm:0xff7a3d,cloud:.25},{a:0x3a5a34,b:0x8a8a58,c:0xd8cfa0,water:.92,ice:.4,life:.7,atm:0x55c8ff,cloud:.85},{a:0x8a6a48,b:0xd8b88a,c:0xf3e2c0,water:0,ice:0,life:0,atm:0xffd49a,cloud:0,gas:1}];
-const AR={lava:['Lava world',0x140a08,0x2e1610,0x5a2a1a,0,0,0,0xff6a30,.15],dune:['Dune world',0x6a3a1e,0xb27a45,0xe7c48c,.08,.1,.05,0xffb070,.2],ocean:['Ocean world',0x2c4a3a,0x6b7f4e,0xc8b88a,.9,.4,.7,0x4f9dff,1],ice:['Glacial world',0x6f7f96,0xb3c4d6,0xf2f6fa,.35,1,.05,0x9fd4ff,.6],
- verdant:['Verdant terra',0x2a4a2a,0x5d7a3c,0xb0a070,.55,.3,1,0x5fb6ff,.85],gas:['Gas giant',0x8a6a48,0xd8b88a,0xf3e2c0,0,0,0,0xffd49a,0],eye:['Eyeball world',0x4a5a50,0x7a7a60,0xcfc6a8,.7,1,.4,0x8ac8ff,.35],
- sulf:['Sulfur world',0x5a5418,0xb0a030,0xe8dc70,.04,0,0,0xd8e060,.7],barren:['Barren rock',0x3a3634,0x6a645e,0xa09890,0,.1,0,0x000000,0],superE:['Ringed super earth',0x34463a,0x7a6e52,0xc8b890,.45,.4,.6,0x6ab0ff,.8]};
-const GASP=[[0x8a6a48,0xd8b88a,0xf3e2c0,0xffd49a],[0x1c3a7a,0x4a7ac8,0xb8d4f0,0x7ab0ff],[0xb8a878,0xe8dcb0,0xfff6dc,0xfff0c0],[0x6a2018,0xc06040,0xf0c0a0,0xff9a70],[0x3a5a5a,0x7ab0a8,0xd0f0e8,0x9ff0e0]];
-const MAPK=[x=>x<.75?'ocean':'eye',x=>x<.65?'verdant':'superE',x=>x<.5?'dune':x<.75?'sulf':'barren',x=>x<.6?'ice':'eye',x=>x<.7?'lava':'barren',x=>x<.6?'ocean':'verdant',()=>'gas'];
-function detailFor(s,force){const r=rng(hash(s));let ki=Math.floor(r()*7);if(force!=null)ki=force;const k=CK[ki];const tint=c=>new THREE.Color(c).offsetHSL((r()-.5)*.06,(r()-.5)*.12,(r()-.5)*.06);
- const au=.82+r()*.5;const a=tint(k.a),b=tint(k.b),c=tint(k.c);const seed=r()*60,ring=k.gas?r()<.85:r()<.4,moon=r()<.75,tilt=(r()-.5)*.9;
- const f=rng(hash(s+'f'));const mass=k.gas?40+f()*260:.4+f()*2;const rad=k.gas?8+f()*4:Math.pow(mass,.27);const moons=moon?1+Math.floor(f()*3):0;
- const g=rng(hash(s+'v'));const key=MAPK[ki](g());const A=AR[key];const sh=(g()-.5)*.16,ss=(g()-.5)*.25,sl=(g()-.5)*.12;const T=c=>new THREE.Color(c).offsetHSL(sh,ss,sl);
- let pa=[A[1],A[2],A[3],A[7]];if(key==='gas')pa=GASP[Math.floor(g()*GASP.length)];const v={key,cls:A[0],a:T(pa[0]),b:T(pa[1]),c:T(pa[2]),atmC:new THREE.Color(pa[3]).offsetHSL((g()-.5)*.08,0,0),water:Math.min(.97,A[4]*(.7+g()*.5)),ice:A[5]*(.6+g()*.5),life:A[6],cloud:A[8]*(.6+g()*.5),
-  cont:.6+g()*1.8,cs:.6+g()*1.3,cb:key==='gas'?1:1+g()*2.2,rot:key==='eye'?0:.02+g()*.1,tilt:(g()-.5)*(g()<.1?2.6:1)};
- const rare=[];const R2=()=>g();const rr=[R2(),R2(),R2(),R2(),R2()];
- const aur=v.atmC.getHex()&&rr[0]<.1&&key!=='gas'?1:0;if(aur)rare.push('Aurora');const storm=key==='gas'?(rr[1]<.4?1:0):0;if(storm)rare.push('Storm eye');
- const rift=(key!=='gas'&&key!=='ocean'&&rr[2]<.12)?1:0;if(rift)rare.push('Canyon rifts');let ringN=key==='gas'?(g()<.8?1:0):key==='superE'?1:(g()<.12?1:0);if(ringN&&rr[3]<.1){ringN=2;rare.push('Double rings')}
- const city=v.life>.5&&rr[4]<.12?1:0;if(city)rare.push('City lights');
- const mo=[];for(let i=0;i<moons;i++)mo.push({s:.05+g()*.11,r:2.5+i*.9+g()*.6,w:(.08+g()*.2)*(g()<.5?1:-1),inc:(g()-.5)*.5,col:new THREE.Color().setHSL(g()*.15,.1+g()*.2,.35+g()*.35),ice:g()<.3?.8:0});
- if(key==='barren')v.cloud=0;Object.assign(v,{aur,storm,rift,ringN,city,rare,mo,lava:key==='lava'?1:0,crater:key==='barren'?1:key==='dune'?.35:key==='lava'?.2:0,eye:key==='eye'?1:0,sulf:key==='sulf'?1:0,ringC:new THREE.Color().setHSL(.08+g()*.06,.25+g()*.3,.55+g()*.2)});
- return{ki,...v,k:{water:v.water,ice:v.ice,life:v.life,atm:v.atmC,cloud:v.cloud,gas:key==='gas'?1:0},au,seed,ring:ringN>0,moons,mass:key==='gas'?mass:key==='superE'?mass*2.6:mass,rad:key==='superE'?Math.pow(mass*2.6,.27):rad,atm:Math.min(99,Math.round(v.key==='gas'?95+f()*4:v.cloud*70+f()*25)),water:Math.min(99,Math.round(v.water*100*(.9+f()*.2))),chem:Math.min(99,Math.round(v.life*80+f()*15))}}
-function paramsFor(w){const r=rng(hash(w));const k=KINDS[Math.floor(r()*KINDS.length)];const au=.82+r()*.5;for(let i=0;i<13;i++)r();const L='BCDFGHJKLMNPRSTVXZ'[Math.floor(r()*18)];
- const K=Math.round(278/Math.sqrt(au)*(1-k[1]*.08)+(k[2]?-60:0));const o=rng(hash(w+'o'));
- return{w,cls:k[0],col:k[3],au,K,e:.01+o()*.11,inc:(o()-.5)*.12,node:o()*6.283,peri:o()*6.283,M0:o()*6.283,mass:1,name:'GL '+(hash(w+'n')%9000+1000)+' '+L,zone:au>=HZI&&au<=HZO}}
+function paramsFor(w){const D=detailFor(w);const o=rng(hash(w+'o'));return{w,cls:D.cls,col:[D.b.r*1.3,D.b.g*1.3,D.b.b*1.3].map(x=>Math.min(1,x+.15)),au:D.au,K:D.K,e:.01+o()*.11,inc:(o()-.5)*.12,node:o()*6.283,peri:o()*6.283,M0:o()*6.283,mass:1,name:D.name,zone:D.au>=HZI&&D.au<=HZO}}
 /* renderer, no post processing */
 const cv=$('#ogl');const DPR=Math.min(devicePixelRatio||1,MOB?1:1.5);const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:!MOB,powerPreference:'high-performance'});renderer.setPixelRatio(DPR);renderer.setClearColor(0x020308);
 const scene=new THREE.Scene();const cam=new THREE.PerspectiveCamera(45,1,.001,10);
@@ -84,11 +60,6 @@ const mk=new THREE.Points(new THREE.BufferGeometry().setAttribute('position',new
  fragmentShader:`uniform float ph;void main(){float r=length(gl_PointCoord-.5)*2.;float ring=1.-smoothstep(0.,.08,abs(r-.82));float dot=smoothstep(.2,.12,r);gl_FragColor=vec4(vec3(.83,.68,.4)*(ring*(.5+.5*ph)+dot),1.);}`},add)));mk.visible=false;mk.frustumCulled=false;scene.add(mk);
 const SEG=MOB?72:128,PR=.002;const dG=new THREE.Group();dG.visible=false;dG.scale.setScalar(PR);scene.add(dG);const tG=new THREE.Group();dG.add(tG);
 const col3=()=>({value:new THREE.Color()});
-const FSX=planetFS.replace('uniform vec3 cA','uniform float cont,lava,crater,eye,sulf,storm,rift,aur,cityK;uniform vec3 cA').replace('fbm(p*1.5+seed)','fbm(p*1.5*cont+seed)').replace('sin(p.y*18.','sin(p.y*18.*cont')
- .replace('col=mix(col,cC,smoothstep(.3,.9,snoise(p*vec3(1.,6.,1.)+seed)));','col=mix(col,cC,smoothstep(.3,.9,snoise(p*vec3(1.,6.,1.)+seed)));vec2 sv=vec2(atan(p.z,p.x)-1.2,(p.y+.28)*2.6);float se=exp(-dot(sv,sv)*9.)*storm;float sw=sin(length(sv)*38.-atan(sv.y,sv.x)*3.);col=mix(col,mix(cC,vec3(.8,.38,.22),.6)*(.85+.15*sw),se);')
- .replace('col=mix(land,oc,isSea);','col=mix(land,oc,isSea);if(crater>0.){vec3 cp=p*6.5;vec3 ci=floor(cp);float cr=0.;for(int x=-1;x<=1;x++)for(int y=-1;y<=1;y++)for(int z=-1;z<=1;z++){vec3 c=ci+vec3(float(x),float(y),float(z));vec3 h3=fract(sin(vec3(dot(c,vec3(127.1,311.7,74.7)),dot(c,vec3(269.5,183.3,246.1)),dot(c,vec3(113.5,271.9,124.6))))*43758.5453);float rad=.15+.32*h3.x;float dd=length(cp-c-h3)/rad;cr+=smoothstep(.72,1.,dd)*smoothstep(1.3,1.,dd)*.3-smoothstep(1.,.55,dd)*.32;}col*=1.+cr*crater;}float rf=smoothstep(.03,.0,abs(snoise(p*vec3(1.6,.6,1.6)+seed*.7)))*rift;col=mix(col,col*.22,rf);if(eye>0.){float e=dot(normalize(vN),normalize(-vW));col=mix(vec3(.88,.93,1.),col,smoothstep(.15,.42,e));col=mix(col,oc,smoothstep(.62,.8,e)*.9);}col=mix(col,col*vec3(1.1,1.04,.45)+vec3(.05,.04,0.),sulf*.5);')
- .replace('*life*life;lit+=vec3(1.,.7,.35)*city','*cityK;lit+=vec3(1.,.7,.35)*city')
- .replace(/gl_FragColor=vec4\(lit,1\.\);\}$/,'if(lava>0.){float ck=1.-smoothstep(.0,.06,abs(snoise(p*4.5*cont+seed)));ck=max(ck,(1.-smoothstep(.0,.04,abs(snoise(p*11.+seed*2.))))*.8);float gl=ck*(.65+.35*snoise(p*18.+t*.15));lit+=vec3(1.,.36,.07)*gl*1.7*(1.-day*.45);}if(aur>0.){float la=abs(p.y);float band=smoothstep(.68,.78,la)*smoothstep(.95,.83,la);float cur=.5+.5*snoise(vec3(atan(p.z,p.x)*3.,t*.3,p.y*4.));lit+=vec3(.2,1.,.55)*band*cur*(1.-day)*1.1;}if(sulf>0.){lit=mix(lit,vec3(.72,.7,.3)*(day*.85+.03),.3*(.4+fr));}gl_FragColor=vec4(lit,1.);}');
 const pM=new THREE.ShaderMaterial({uniforms:{cA:col3(),cB:col3(),cC:col3(),seed:{value:1},water:{value:0},life:{value:0},ice:{value:0},t:{value:0},gas:{value:0},cshadow:{value:.8},cont:{value:1},lava:{value:0},crater:{value:0},eye:{value:0},sulf:{value:0},storm:{value:0},rift:{value:0},aur:{value:0},cityK:{value:0}},vertexShader:planetVS,fragmentShader:FSX});
 const pB=new THREE.Mesh(new THREE.SphereGeometry(1,SEG,SEG),pM);tG.add(pB);
 const cM=new THREE.ShaderMaterial({uniforms:{t:{value:0},u:{value:0},cs:{value:1},cb:{value:1}},transparent:true,depthWrite:false,vertexShader:planetVS,
@@ -121,9 +92,11 @@ const galaxy=starField(MOB?40000:140000,()=>{const arm=Math.floor(gr()*4);const 
 /* data */
 let real=[],demo=[];const realPts=cloud(4096),demoPts=cloud(MOB?10000:50000);demoPts.visible=false;
 function makeDemo(){const n=MOB?10000:50000,r=rng(7);const out=[];for(let i=0;i<n;i++){const au=Math.exp(Math.log(.55)+r()*Math.log(80));out.push({au,e:r()*.28,inc:(r()-.5)*.2,node:r()*6.283,peri:r()*6.283,M0:r()*6.283,col:au>=HZI&&au<=HZO?[.83,.68,.4]:[.55,.55,.6],demo:1,i})}return out}
+const HINT=MOB?'Tap a planet to inspect it. Pinch to zoom.':'Click a planet to inspect it. Drag to rotate. Scroll to zoom.';
 async function loadReal(){if(!API){$('#smsg').textContent='Claims open soon. Turn on the preview layer to see a full system.';return}
- try{const r=await fetch(API+'/api/planets');const j=await r.json();real=(j.planets||[]).map(x=>Object.assign(paramsFor(x.wallet),{no:x.no}));fill(realPts,real.slice(0,4096),3,.0012);
-  $('#nReal').textContent=real.length;$('#nZone').textContent=real.filter(p=>p.zone).length;if(!real.length)$('#smsg').textContent='No planets claimed yet. Turn on the preview layer to see a full system.'}catch(e){$('#smsg').textContent='Live planet data is unavailable right now.'}}
+ $('#smsg').textContent='Loading claimed planets.';
+ try{const ac=new AbortController();const to=setTimeout(()=>ac.abort(),10000);const r=await fetch(API+'/api/planets',{signal:ac.signal});clearTimeout(to);if(!r.ok)throw new Error('http');const j=await r.json();real=(j.planets||[]).map(x=>Object.assign(paramsFor(x.wallet),{no:x.no}));fill(realPts,real.slice(0,4096),3,.0012);
+  $('#nReal').textContent=real.length;$('#nZone').textContent=real.filter(p=>p.zone).length;$('#smsg').textContent=real.length?'':'No planets claimed yet. Turn on the preview layer to see a full system.'}catch(e){$('#smsg').textContent='Live planet data is unavailable right now. Wallet search still shows where a planet would form.';$('#nReal').textContent=$('#nZone').textContent='n/a'}}
 $('#demo').addEventListener('change',e=>{if(!demo.length){demo=makeDemo();fill(demoPts,demo,MOB?1.2:1.4,.0007)}demoPts.visible=e.target.checked;$('#demoNote').textContent=e.target.checked?'Preview layer on. '+demo.length.toLocaleString('en-US')+' simulated planets, not real wallets.':'Preview layer. Simulated planets are not real wallets.'});
 /* camera */
 const HOME={th:1.5708,ph:.62,ld:Math.log(5.4)};const S={th:HOME.th,ph:HOME.ph,ld:HOME.ld,tth:HOME.th,tph:HOME.ph,tld:HOME.ld,tgt:new THREE.Vector3(),off:new THREE.Vector3(),follow:null};const LMIN=Math.log(.004),LMAX=Math.log(1.6e5*LY);
@@ -151,10 +124,11 @@ function select(p,noFly){picked=p;orbitLine(p);applyDetail(p);$('#panel').hidden
  $('#qName').textContent=p.demo?'Simulated planet '+(p.i+1):p.name;spec(p,D);$('#qD').textContent=describe(p,D);
  $('#qS').textContent=p.demo?'Preview layer':'Stage: awaiting launch';$('#qNo').textContent=p.demo?'':p.no?'No. '+String(p.no).padStart(3,'0'):'Not claimed';
  if(noFly){mk.visible=true;setFollow(false)}else enterPlanet()}
-function enterPlanet(){if(!picked)return;VIEW=1;FLY=1;setFollow(true);S.tld=Math.log(PR*(MOB?6.4:5.6));S.tph=Math.min(S.tph,1.25);document.body.classList.add('pv');$('#qView').textContent='Back to system'}
-function exitPlanet(){if(!VIEW)return;VIEW=0;FLY=1;setFollow(false);S.tld=HOME.ld;S.tth=HOME.th;S.tph=HOME.ph;document.body.classList.remove('pv');$('#qView').textContent='Planet view';mk.visible=!!picked}
+function dayAngles(p){posOf(p,U.t.value,tmp);const s=tmp.clone().negate().normalize();const up=new THREE.Vector3(0,1,0);const sd=new THREE.Vector3().crossVectors(up,s).normalize();const v=s.multiplyScalar(Math.cos(.8)).addScaledVector(sd,Math.sin(.8)).addScaledVector(up,.3).normalize();let th=Math.atan2(v.z,v.x);th+=Math.round((S.th-th)/6.2832)*6.2832;return{th,ph:Math.acos(v.y)}}
+function enterPlanet(){if(!picked)return;VIEW=1;FLY=1;setFollow(true);S.tld=Math.log(PR*(MOB?6.4:5.6));const da=dayAngles(picked);S.tth=da.th;S.tph=da.ph;$('#hint').textContent=MOB?'Drag to turn the planet. Back to system returns.':'Drag to turn around the planet. Press Esc to return.';document.body.classList.add('pv');$('#qView').textContent='Back to system'}
+function exitPlanet(){if(!VIEW)return;$('#hint').textContent=HINT;VIEW=0;FLY=1;setFollow(false);S.tld=HOME.ld;S.tth=HOME.th;S.tph=HOME.ph;document.body.classList.remove('pv');$('#qView').textContent='Planet view';mk.visible=!!picked}
 $('#qView').addEventListener('click',()=>VIEW?exitPlanet():enterPlanet());
-addEventListener('keydown',e=>{if(e.key==='Escape'){if(VIEW)exitPlanet();else if(picked)$('#qClose').click()}});
+addEventListener('keydown',e=>{if(e.key==='Escape'){if(e.target&&e.target.tagName==='INPUT'){e.target.blur();if(!VIEW)return}if(VIEW)exitPlanet();else if(picked)$('#qClose').click()}});
 $('#qClose').addEventListener('click',()=>{exitPlanet();$('#panel').hidden=true;picked=null;setFollow(false);mk.visible=false;sel.visible=false});
 $('#sf').addEventListener('submit',e=>{e.preventDefault();const q=$('#sq').value.trim();const m=$('#smsg');if(!q){m.textContent='';return}
  const hit=real.find(p=>p.w===q)||real.find(p=>q.length>=4&&p.w.toLowerCase().startsWith(q.toLowerCase()));
@@ -195,5 +169,5 @@ function frame(now){requestAnimationFrame(frame);if(document.hidden)return;const
  sunSM.uniforms.t.value=corSM.uniforms.t.value=now/1000;corM.quaternion.copy(cam.quaternion);const camS=cam.position.length();sunM.visible=corM.visible=camS<500;sun.material.uniforms.fo.value=Math.min(1,Math.max(0,(camS-60)/240));
  placeLabels(sys,d);
  renderer.render(scene,cam)}
-addEventListener('resize',size,{passive:true});size();loadReal();requestAnimationFrame(frame);
+addEventListener('resize',size,{passive:true});size();$('#hint').textContent=HINT;loadReal().finally(()=>{const w=new URLSearchParams(location.search).get('w');if(w&&/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)){$('#sq').value=w;$('#sf').requestSubmit()}});requestAnimationFrame(frame);
 window.__orbits={S,setPlay,exitPlanet,get demo(){return demo},select,get real(){return real},demoOn:()=>{$('#demo').click()}};

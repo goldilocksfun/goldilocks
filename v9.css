@@ -85,3 +85,5 @@ html,body,footer,.cl-foot,.flat,#actions{background-color:#020308}
 .panel .kicker,.panel .sub,.panel .meters,.panel .scrollcue,.rv,#chapname,#chapname.swap{filter:none!important}
 .hud-r,body.solid .nav,.nav{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 #gl,#cgl{will-change:opacity}#cur,#cur-dot{display:none!important}
+
+.pc-trait{font-size:10px;letter-spacing:.06em;line-height:1.6;margin:0;padding:10px 0;border-top:1px solid var(--line)}.pc-trait:empty{display:none}.pc-trait a{color:var(--gold);text-decoration:underline;text-underline-offset:3px}
