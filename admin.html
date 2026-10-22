@@ -1,0 +1,18 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>Review | Goldilocks</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="claim.css"><link rel="stylesheet" href="v9.css"><link rel="stylesheet" href="play.css"></head>
+<body class="cl pl"><main class="pl-main"><section class="pl-head"><p class="mono dim kick">Claim review</p><h1>Pending claims</h1>
+<p class="lede">Check each handle on X: follows the official account, reposted, liked, and replied to the claim post with the code shown. Approve or reject.</p>
+<div class="pl-acts"><form id="kf" class="look"><input id="key" class="mono" type="password" placeholder="Admin key" autocomplete="off"><button class="lbtn mono">Load</button></form>
+<form class="look"><select id="st" class="mono" style="background:transparent;color:var(--ink);border:0;padding:0 14px;min-height:40px"><option>pending</option><option>approved</option><option>rejected</option><option>all</option></select></form></div>
+<p class="msg mono" id="msg"></p></section>
+<section class="pl-sec"><div class="tw"><table class="tbl mono" id="t"><thead><tr><th>Handle</th><th>Code</th><th>Wallet</th><th>Invited by</th><th>Invites</th><th>Created</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div></section></main>
+<script src="config.js"></script><script>
+(function(){const API=window.CONFIG.API_BASE,$=s=>document.querySelector(s);let K=sessionStorage.getItem('glk')||'';$('#key').value=K;const sh=w=>w?w.slice(0,4)+'..'+w.slice(-4):'-';
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function call(p,b){const r=await fetch(API+p,{method:b?'POST':'GET',headers:{'content-type':'application/json','x-admin-key':K},body:b?JSON.stringify(b):undefined});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.status);return j}
+async function load(){try{const j=await call('/api/admin/claims?status='+$('#st').value);$('#msg').textContent=j.claims.length+' claims. Post '+j.tweetId+'. Mode '+j.mode+'.';
+ $('#t tbody').innerHTML=j.claims.map(c=>'<tr><td><a href="https://x.com/'+esc(c.handle.slice(1))+'" target="_blank" rel="noopener">'+esc(c.handle)+'</a></td><td>'+esc(c.code)+'</td><td>'+sh(c.wallet)+'</td><td>'+sh(c.invited_by)+'</td><td>'+c.qualified_invites+' / '+c.invites+'</td><td>'+esc(c.created_at.slice(0,16).replace('T',' '))+'</td><td>'+esc(c.status)+(c.reason?' / '+esc(c.reason):'')+'</td><td>'+(c.status==='pending'?'<button class="lbtn" data-a="approve" data-id="'+esc(c.id)+'">Approve</button><button class="lbtn" data-a="reject" data-id="'+esc(c.id)+'">Reject</button>':'')+'</td></tr>').join('')}catch(e){$('#msg').textContent='Could not load: '+e.message}}
+$('#kf').onsubmit=e=>{e.preventDefault();K=$('#key').value.trim();sessionStorage.setItem('glk',K);load()};$('#st').onchange=load;
+$('#t').onclick=async e=>{const b=e.target.closest('button');if(!b)return;let body={};if(b.dataset.a==='reject'){const r=prompt('Reason (shown to the user)','');if(r===null)return;body={reason:r}}else{const id=prompt('X user id (optional)','');const age=prompt('Account age in days (for invite credit)','');const f=prompt('Followers (for invite credit)','');body={x_user_id:id||undefined,account_age_days:age?+age:undefined,followers:f?+f:undefined}}
+ try{await call('/api/admin/claims/'+encodeURIComponent(b.dataset.id)+'/'+b.dataset.a,body);load()}catch(x){$('#msg').textContent=x.message}};if(K)load()})();
+</script></body></html>

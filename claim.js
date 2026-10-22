@@ -103,10 +103,10 @@ const msg=(t,k)=>{const m=$('#msg');m.textContent=t||'';m.className='msg mono'+(
 const setStep=(k,st)=>{const e=steps[k];e.classList.toggle('done',st==='done');e.classList.toggle('active',st==='active')};
 const state={wallet:null,claim:null,token:null,replyCode:null,cfg:null,tasks:{}};
 const hasHandle=()=>/^@?[A-Za-z0-9_]{1,15}$/.test(($('#xIn').value||'').trim());
-function refresh(){const c=state.claim,st=c&&c.status,cfg=state.cfg||{req:{}};const signed=!!state.token||!!st;const reserved=st==='reserved'||st==='final';const tid=cfg.tweetId;
+function refresh(){const c=state.claim,st=c&&c.status,cfg=state.cfg||{req:{}};const signed=!!state.token||(!!st&&st!=='rejected');const reserved=st==='reserved'||st==='final';const tid=cfg.tweetId;
  setStep('follow',hasHandle()&&LS.get('followed')==='1'?'done':'active');setStep('sign',signed?'done':hasHandle()?'active':'');
  setStep('tasks',reserved?'done':signed&&tid?'active':'');steps.tasks.classList.toggle('unlocked',!!tid&&signed||reserved);steps.tasks.setAttribute('aria-disabled',tid?'false':'true');
- $('#tdesc').textContent=!tid?'Claim opens when the announcement post is live.':reserved?'All tasks verified.':'Do each task on X, then press Verify. Checks can take a minute to show up.';
+ $('#tdesc').textContent=st==='review'?'Submitted for review. Checks are done by hand, usually within a few hours.':st==='rejected'?'Not approved'+(c.reason?': '+c.reason:'')+'. Fix it on X, then sign and verify again.':!tid?'Claim opens when the announcement post is live.':reserved?'All tasks verified.':'Do each task on X, then press Verify. Checks can take a minute to show up.';
  for(const k of ['follow','repost','like','reply']){const li=$('#xt [data-t="'+k+'"]');li.hidden=cfg.req[k]===false;li.classList.toggle('ok',!!state.tasks[k]||reserved);li.classList.toggle('no',state.tasks[k]===false)}
  $('#rCode').textContent=state.replyCode||'your code';if(tid){$('#bRt').href='https://x.com/intent/retweet?tweet_id='+tid;$('#bLk').href='https://x.com/intent/like?tweet_id='+tid;
   $('#bRp').href='https://x.com/intent/post?in_reply_to='+tid+'&text='+encodeURIComponent('Claiming my free Goldilocks planet. '+(state.replyCode||''))}
@@ -138,7 +138,9 @@ bS.addEventListener('click',async()=>{if(state.full&&!state.claim){msg('All free
   state.wallet=w.address;
   if(!API){showPlanet(w.address,false);bS.textContent='Claims open soon';bS.setAttribute('aria-disabled','true');msg('Preview generated from '+short(w.address)+'.','ok');return}
   bS.classList.add('busy');msg('Checking your wallet.');
-  const me=await api('/api/me?wallet='+encodeURIComponent(w.address));if(me.status==='final'||me.status==='reserved'){state.claim=me;showPlanet(w.address,true,me.no);refresh();msg(me.status==='final'?'Welcome back. Your planet is claimed.':'Welcome back. Your planet is reserved.','ok');return}
+  const me=await api('/api/me?wallet='+encodeURIComponent(w.address));if(me.status==='review'){state.claim=me;state.replyCode=me.replyCode;showPlanet(w.address,false);refresh();msg('Your X tasks are waiting for review.','ok');return}
+  if(me.status==='rejected')msg('Not approved'+(me.reason?': '+me.reason:'')+'. Fix it on X, then sign and verify again.','err');
+  if(me.status==='final'||me.status==='reserved'){state.claim=me;showPlanet(w.address,true,me.no);refresh();msg(me.status==='final'?'Welcome back. Your planet is claimed.':'Welcome back. Your planet is reserved.','ok');return}
   const {message}=await api('/api/nonce',{method:'POST',body:JSON.stringify({wallet:w.address})});msg('Approve the signature in your wallet. No transaction, no fee.');
   const sig=await w.signMessage(new TextEncoder().encode(message));
   msg('Verifying signature.');const c=await api('/api/claim',{method:'POST',body:JSON.stringify({wallet:w.address,signature:b64(new Uint8Array(sig)),ref:LS.get('ref')||'',followed:LS.get('followed')==='1'})});
@@ -149,6 +151,7 @@ bS.addEventListener('click',async()=>{if(state.full&&!state.claim){msg('All free
 $('#bVerify').addEventListener('click',async()=>{if(!state.token){msg('Connect and sign with your wallet first.','err');return}const b=$('#bVerify');b.classList.add('busy');msg('Checking X.');
  try{const r=await fetch(API+'/api/x/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({wallet:state.wallet,token:state.token,handle:$('#xIn').value.trim()})});const j=await r.json().catch(()=>({}));
   state.tasks=j.tasks||state.tasks;if(!r.ok){refresh();msg(j.error||'Check failed. Try again.','err');return}
+  if(j.review){state.claim=j;refresh();msg('Submitted. Your X tasks are checked by hand, usually within a few hours. Come back to this page to see the result.','ok');return}
   if(!j.ready){refresh();const miss=['follow','repost','like','reply'].filter(k=>state.cfg.req[k]&&!state.tasks[k]);msg('Not found yet: '+miss.join(', ')+'. X can take a minute to update.','err');return}
   state.claim=j;state.token=null;showPlanet(state.wallet,true,j.no);refresh();loadStats();msg(j.status==='final'?'Planet claimed. Welcome to Season 01.':'Planet reserved. Invite a friend to make it final.','ok')}
  catch(e){msg('Check failed. Try again.','err')}finally{b.classList.remove('busy')}});

@@ -15,7 +15,7 @@ const NONCE_TTL=10*60e3;
 fs.mkdirSync(path.dirname(DATA),{recursive:true});
 // One-off wipe (for clearing test data): set PURGE_ON_START=1 for a single boot, then remove it.
 if(process.env.PURGE_ON_START==='1'){try{fs.unlinkSync(DATA);console.log('store purged');}catch(e){}}
-let db={claims:{},codes:{},seq:0,pending:{},xids:{},cfg:{}};try{db=Object.assign(db,JSON.parse(fs.readFileSync(DATA,'utf8')));}catch(e){}
+let db={claims:{},codes:{},seq:0,pending:{},xids:{},xhandles:{},reviews:{},cfg:{}};try{db=Object.assign(db,JSON.parse(fs.readFileSync(DATA,'utf8')));}catch(e){}
 let dirty=false;const save=()=>{dirty=true;};
 setInterval(()=>{if(!dirty)return;dirty=false;const tmp=DATA+'.tmp';fs.writeFileSync(tmp,JSON.stringify(db));fs.renameSync(tmp,DATA);},1000).unref();
 const flush=()=>{try{fs.writeFileSync(DATA,JSON.stringify(db));}catch(e){}};process.on('SIGTERM',()=>{flush();process.exit(0);});process.on('SIGINT',()=>{flush();process.exit(0);});
@@ -33,13 +33,13 @@ const newCode=()=>{let c;do{c=crypto.randomBytes(5).toString('base64url').replac
 const nonces=new Map();
 function message(wallet,nonce,iat){return `${DOMAIN} wants you to claim a free Goldilocks planet.\n\nWallet: ${wallet}\nNonce: ${nonce}\nIssued at: ${iat}\n\nThis is a signature only. No transaction, no fee, no funds move.`;}
 function verify(wallet,msg,sigB64){try{const sig=Buffer.from(String(sigB64||''),'base64');if(sig.length!==64)return false;return nacl.sign.detached.verify(new TextEncoder().encode(msg),new Uint8Array(sig),bs58.decode(wallet));}catch(e){return false;}}
-const view=w=>{const c=db.claims[w];if(!c){const p=db.pending&&db.pending[w];return p?{claimed:false,status:'signed',replyCode:p.replyCode,x:p.x||null}:{claimed:false};}
+const view=w=>{const c=db.claims[w];if(!c){const p=db.pending&&db.pending[w];const rv=Object.values(db.reviews||{}).filter(r=>r.wallet===w).pop();if(rv&&rv.status!=='approved')return{claimed:false,status:rv.status==='pending'?'review':'rejected',reason:rv.reason||null,replyCode:rv.code,x:'@'+rv.handle};return p?{claimed:false,status:'signed',replyCode:p.replyCode,x:p.x||null}:{claimed:false};}
   const st=c.status||'final';return {claimed:st==='final',status:st,no:c.no,seed:c.seed,code:c.code,invites:c.invites||0,qualifiedInvites:c.qinv||0,invitesNeeded:REQ.invites,reservedAt:c.reservedAt||null,holdUntil:c.reservedAt?c.reservedAt+REQ.holdMs:null,x:c.xHandle?'@'+c.xHandle:null,followed:!!c.followed,at:c.at};};
 const activeHolds=()=>REQ.holds?Object.values(db.claims).filter(c=>c.status==='reserved'&&Date.now()-c.reservedAt<REQ.holdMs).length:0;
 function finalize(c){if(c.status!=='reserved')return false;if(MAX&&db.seq>=MAX)return false;db.seq++;c.no=db.seq;c.status='final';c.finalAt=Date.now();return true;}
 function creditInviter(c){if(!c.by||c.credited)return;const r=db.claims[c.by];if(!r)return;const q=c.xq||{};
   if(q.ageDays>=REQ.minAgeDays&&q.followers>=REQ.minFollowers&&c.xId&&c.xId!==r.xId){r.qinv=(r.qinv||0)+1;c.credited=true;if(r.status==='reserved'&&r.qinv>=REQ.invites)finalize(r);}}
-const stats=()=>({open:OPEN,total:db.seq,reserved:Object.values(db.claims).filter(c=>c.status==='reserved').length,max:MAX||null,tweetId:tweetId()||null,req:{follow:REQ.follow,repost:REQ.repost,like:REQ.like,reply:REQ.reply,invites:REQ.invites},official:REQ.official,top:Object.values(db.claims).filter(c=>c.invites>0).sort((a,b)=>b.invites-a.invites||(a.no||1e9)-(b.no||1e9)).slice(0,10).map(c=>({wallet:c.wallet.slice(0,4)+'..'+c.wallet.slice(-4),invites:c.invites,no:c.no}))});
+const stats=()=>({open:OPEN,total:db.seq,reserved:Object.values(db.claims).filter(c=>c.status==='reserved').length,max:MAX||null,tweetId:tweetId()||null,verify:VERIFY_MODE,req:{follow:REQ.follow,repost:REQ.repost,like:REQ.like,reply:REQ.reply,invites:REQ.invites},official:REQ.official,top:Object.values(db.claims).filter(c=>c.invites>0).sort((a,b)=>b.invites-a.invites||(a.no||1e9)-(b.no||1e9)).slice(0,10).map(c=>({wallet:c.wallet.slice(0,4)+'..'+c.wallet.slice(-4),invites:c.invites,no:c.no}))});
 
 // ---------- rate limit (sliding window per IP and bucket) ----------
 const rl=new Map();
@@ -143,13 +143,26 @@ async function gameRoute(req,res,u,p,ip){
 
 // ---------- X tasks, reservation and invites ----------
 const X=require('./lib/xverify');
+// manual: X tasks are reviewed by a person (or bot) through the admin endpoints; auto: checked with the X API.
+const VERIFY_MODE=process.env.CLAIM_VERIFY==='auto'?'auto':'manual';
+db.reviews=db.reviews||{};db.xhandles=db.xhandles||{};
+function reserve(wallet,x,t,ip,refOverride){if(db.claims[wallet])return{ok:true};if(MAX&&db.seq+activeHolds()>=MAX)return{error:'All planets for this season are claimed or reserved.'};
+  const pc=db.pending[wallet]||{};const ref=String(refOverride||pc.ref||'').toUpperCase();const code=newCode();const rw=db.codes[ref];const by=rw&&rw!==wallet&&db.claims[rw]?rw:null;if(by)db.claims[by].invites=(db.claims[by].invites||0)+1;
+  const c=db.claims[wallet]={wallet,no:null,status:'reserved',reservedAt:Date.now(),seed:crypto.createHash('sha256').update(wallet).digest('hex').slice(0,16),code,by,followed:!!t.follow,invites:0,qinv:0,
+    xId:x.id,xHandle:String(x.username).toLowerCase(),xq:{ageDays:Math.floor(x.ageDays||0),followers:x.followers||0},tasks:t,at:new Date().toISOString(),ip:crypto.createHash('sha256').update(String(ip)+DOMAIN).digest('hex').slice(0,12)};
+  db.codes[code]=wallet;db.xids[x.id]=wallet;db.xhandles[c.xHandle]=wallet;delete db.pending[wallet];if(REQ.invites<=0)finalize(c);creditInviter(c);save();return{ok:true};}
 async function claimRoute(req,res,u,p,ip){
   if(p==='/api/x/verify'&&req.method==='POST'){if(limited(ip,'xv',12,600e3))return send(req,res,429,{error:'Too many checks. Wait a few minutes.'});
     const {wallet,token,handle}=await body(req);const pc=db.pending[wallet];if(!pc||pc.token!==token)return send(req,res,401,{error:'Connect and sign with your wallet first.'});
     const h=String(handle||'').replace(/^@/,'').trim();if(!/^[A-Za-z0-9_]{1,15}$/.test(h))return send(req,res,400,{error:'Enter your X handle.'});
     const tid=tweetId();if((REQ.repost||REQ.like||REQ.reply)&&!tid)return send(req,res,409,{error:'Claim opens when the announcement post is live.'});
+    const hl=h.toLowerCase();const owner=db.xhandles[hl];if(owner&&owner!==wallet)return send(req,res,409,{error:'This X account already holds a planet.'});
+    if(db.claims[wallet])return send(req,res,200,Object.assign(view(wallet),{ready:true}));
+    if(VERIFY_MODE==='manual'){const taken=Object.values(db.reviews).find(r=>r.status==='pending'&&r.handle===hl&&r.wallet!==wallet);if(taken)return send(req,res,409,{error:'This X account is already waiting for review.'});
+      db.reviews[pc.replyCode]={id:pc.replyCode,wallet,handle:hl,xId:null,code:pc.replyCode,ref:pc.ref||'',status:'pending',created_at:new Date().toISOString()};pc.x='@'+h;save();
+      return send(req,res,200,Object.assign(view(wallet),{ready:false,review:true}));}
     let usr;try{usr=await X.userByHandle(h);}catch(e){return send(req,res,e.code===404?404:503,{error:e.code===404?'That X account was not found.':'X checks are unavailable right now. Try again shortly.'});}
-    const owner=db.xids[usr.id];if(owner&&owner!==wallet)return send(req,res,409,{error:'This X account already holds a planet.'});
+    const owner2=db.xids[usr.id];if(owner2&&owner2!==wallet)return send(req,res,409,{error:'This X account already holds a planet.'});
     const t={};try{const off=await X.userByHandle(REQ.official);
       if(REQ.follow)t.follow=await X.follows(usr.id,usr.username,off.id,REQ.official);
       if(REQ.repost)t.repost=await X.reposted(usr.id,tid);
@@ -158,15 +171,19 @@ async function claimRoute(req,res,u,p,ip){
     catch(e){return send(req,res,e.code===429?429:503,{error:e.code===429?e.message:'X checks are unavailable right now. Try again shortly.',tasks:t});}
     pc.x='@'+usr.username;pc.tasks=t;save();
     const ok=['follow','repost','like','reply'].every(k=>!REQ[k]||t[k]);if(!ok)return send(req,res,200,Object.assign(view(wallet),{tasks:t,ready:false}));
-    if(db.claims[wallet])return send(req,res,200,Object.assign(view(wallet),{tasks:t,ready:true}));
-    if(MAX&&db.seq+activeHolds()>=MAX)return send(req,res,410,{error:'All planets for this season are claimed or reserved.',tasks:t});
-    const code=newCode();const rw=db.codes[pc.ref];const by=rw&&rw!==wallet&&db.claims[rw]?rw:null;if(by)db.claims[by].invites=(db.claims[by].invites||0)+1;
-    const ageDays=(Date.now()-Date.parse(usr.createdAt))/864e5;
-    const c=db.claims[wallet]={wallet,no:null,status:'reserved',reservedAt:Date.now(),seed:crypto.createHash('sha256').update(wallet).digest('hex').slice(0,16),code,by,followed:!!t.follow,invites:0,qinv:0,
-      xId:usr.id,xHandle:usr.username.toLowerCase(),xq:{ageDays:Math.floor(ageDays),followers:usr.followers},tasks:t,at:new Date().toISOString(),ip:crypto.createHash('sha256').update(ip+DOMAIN).digest('hex').slice(0,12)};
-    db.codes[code]=wallet;db.xids[usr.id]=wallet;delete db.pending[wallet];
-    if(REQ.invites<=0)finalize(c);creditInviter(c);save();
+    const r=reserve(wallet,{id:usr.id,username:usr.username,ageDays:(Date.now()-Date.parse(usr.createdAt))/864e5,followers:usr.followers},t,ip);if(r.error)return send(req,res,410,{error:r.error,tasks:t});
     return send(req,res,200,Object.assign(view(wallet),{tasks:t,ready:true}));}
+  if(p.startsWith('/api/admin/claims')){if(!isAdmin(req))return send(req,res,403,{error:'Forbidden.'});
+    if(p==='/api/admin/claims'&&req.method==='GET'){const st=u.searchParams.get('status')||'pending';
+      return send(req,res,200,{mode:VERIFY_MODE,tweetId:tweetId(),claims:Object.values(db.reviews).filter(r=>st==='all'||r.status===st).sort((a,b)=>a.created_at<b.created_at?-1:1).map(r=>{const c=db.claims[r.wallet];const by=db.codes[r.ref];
+        return{id:r.id,handle:'@'+r.handle,x_user_id:r.xId||null,wallet:r.wallet,code:r.code,ref:r.ref||null,invited_by:by||null,invites:c?c.invites||0:0,qualified_invites:c?c.qinv||0:0,status:r.status,reason:r.reason||null,created_at:r.created_at,reviewed_at:r.reviewed_at||null};})});}
+    let m=p.match(/^\/api\/admin\/claims\/([^/]+)\/(approve|reject)$/);if(m&&req.method==='POST'){const r=db.reviews[decodeURIComponent(m[1])];if(!r)return send(req,res,404,{error:'No such review.'});if(r.status!=='pending')return send(req,res,409,{error:'Already '+r.status+'.'});const b=await body(req);
+      if(m[2]==='reject'){r.status='rejected';r.reason=String(b.reason||'').slice(0,200);r.reviewed_at=new Date().toISOString();save();return send(req,res,200,r);}
+      const owner=db.xhandles[r.handle];if(owner&&owner!==r.wallet)return send(req,res,409,{error:'X account already holds a planet.'});
+      const x={id:b.x_user_id?String(b.x_user_id):'h:'+r.handle,username:r.handle,ageDays:b.account_age_days!=null?+b.account_age_days:0,followers:b.followers!=null?+b.followers:0};
+      const pc=db.pending[r.wallet]||{ref:r.ref};const res2=reserve(r.wallet,x,{follow:true,repost:true,like:true,reply:true,manual:true},ip,pc.ref||r.ref);if(res2.error)return send(req,res,410,{error:res2.error});
+      r.status='approved';r.xId=x.id;r.reviewed_at=new Date().toISOString();save();return send(req,res,200,Object.assign({review:r},view(r.wallet)));}}
+
   if(p==='/api/admin/claimcfg'&&req.method==='POST'){if(!isAdmin(req))return send(req,res,403,{error:'Forbidden.'});const b=await body(req);db.cfg=db.cfg||{};if(b.tweetId!==undefined){if(b.tweetId&&!/^\d{5,25}$/.test(b.tweetId))return send(req,res,400,{error:'bad id'});db.cfg.tweetId=b.tweetId||'';}save();return send(req,res,200,{tweetId:tweetId()});}
   return false;}
 module.exports={server,message,verify,db,E,X,REQ};
