@@ -4,27 +4,34 @@ const G=require('./game');
 function create(db,save,opts={}){
   const C=G.config();const now=opts.now||(()=>Date.now());
   const S=db.game=db.game||{planets:{},snaps:{},tick:-1,burnSigs:{},burnPool:0,carry:{},jackpot:0,epochs:[],lifeWinner:null,lifeAwarded:false,freeBurns:{},supply:null,lastSnap:null};
-  const ensure=(w,src)=>{let p=S.planets[w];if(!p){p=S.planets[w]=G.newPlanet(w,src,now());}else if(src==='free'&&p.src!=='free')p.src='free';return p;};
+  S.win=S.win||{};S.seeds=S.seeds||{};
+  const curSeed=()=>S.seeds[G.dayOf(now())]||null;
+  const ensure=(w,src)=>{let p=S.planets[w];if(!p){p=S.planets[w]=G.newPlanet(w,src,now(),curSeed());}else if(src==='free'&&p.src!=='free')p.src='free';return p;};
   // Free claimed planets.
   function syncClaims(){for(const w in db.claims){const st=db.claims[w].status;if(!st||st==='final')ensure(w,'free');}}
-  // Holder snapshot: balances map {owner:raw}. Holding for a tick is the minimum across snapshots in that tick.
-  function snapshot(bal,supply){const t=now();S.supply=String(supply);S.lastSnap=t;
-    for(const w of new Set([...Object.keys(bal),...Object.keys(S.snaps)])){const b=BigInt(bal[w]||0);const prev=S.snaps[w];S.snaps[w]=prev==null?String(b):String(b<BigInt(prev)?b:BigInt(prev));}
-    for(const w in bal){const m=G.massFrom(bal[w],supply,C);if(m>0){const p=ensure(w,'hold');if(p.holdSince==null)p.holdSince=t;}}
-    for(const w in S.planets){const p=S.planets[w];if(G.massFrom(bal[w]||0,supply,C)===0&&p.src!=='free')p.holdSince=null;}
+  // Holder snapshot: balances map {owner:raw}. Mass uses the MIN balance over the trailing MIN_HOLD_MS (24h) of snapshots,
+  // kept as a monotonic queue per wallet. A top-up therefore counts only once it has been held for the full window.
+  // since = first snapshot of the current unbroken non-zero streak; a zero balance resets it.
+  const minBal=w=>{const x=S.win[w];return x&&x.q.length?x.q[0][1]:'0';};
+  function snapshot(bal,supply){const t=now();S.supply=String(supply);S.lastSnap=t;const W=C.MIN_HOLD_MS;
+    for(const w of new Set([...Object.keys(bal),...Object.keys(S.win)])){const b=BigInt(bal[w]||0);
+      if(b<=0n){delete S.win[w];continue;}const x=S.win[w]||(S.win[w]={since:(S.planets[w]&&S.planets[w].src!=='free'&&S.planets[w].holdSince)||t,q:[]});
+      while(x.q.length&&BigInt(x.q[x.q.length-1][1])>=b)x.q.pop();x.q.push([t,String(b)]);
+      while(x.q.length>1&&x.q[0][0]<t-W)x.q.shift();}
+    for(const w in S.win){if(G.massFrom(minBal(w),supply,C)>0){const p=ensure(w,'hold');p.holdSince=S.win[w].since;}}
+    for(const w in S.planets){const p=S.planets[w];if(!S.win[w]&&p.src!=='free')p.holdSince=null;}
     S.lastBal=bal;
-    // preview mass and position for planets that have not had a tick yet
-    for(const w in S.planets){const p=S.planets[w];const held=G.massFrom(bal[w]||0,supply,C);p.mass=Math.max(p.src==='free'?C.FREE_MASS:0,p.lastTick<0?held:Math.min(held,p.mass||held));if(p.lastTick<0){p.d=+G.distance(p,Math.floor(t/C.TICK_MS),C).toFixed(5);p.zone=G.zoneOf(p.d,C);}}
+    for(const w in S.planets){const p=S.planets[w];const held=G.massFrom(minBal(w),supply,C);p.mass=Math.max(p.src==='free'?C.FREE_MASS:0,held);if(p.lastTick<0){p.d=+G.distance(p,Math.floor(t/C.TICK_MS),C).toFixed(5);p.zone=G.zoneOf(p.d,C);}}
     save();}
+  function setDaySeed(day,hash){if(!S.seeds[day]){S.seeds[day]=String(hash);const keep=Object.keys(S.seeds).map(Number).sort((a,b)=>b-a).slice(400);for(const k of keep)delete S.seeds[k];save();}}
   // Advance accounting to the current tick (catches up missed ticks deterministically).
   function advance(){syncClaims();const target=Math.floor(now()/C.TICK_MS);if(S.tick<0)S.tick=target-1;let n=0;
     while(S.tick<target&&n<500){S.tick++;n++;const t=now();
-      for(const w in S.planets){const p=S.planets[w];const held=S.supply?G.massFrom(S.snaps[w]||0,S.supply,C):0;
-        p.mass=Math.max(p.src==='free'?C.FREE_MASS:0,held);if(p.src!=='free'&&held===0)p.holdSince=null;
-        G.tickPlanet(p,S.tick,t,C);
+      const ds=S.seeds[G.dayOf(S.tick*C.TICK_MS)]||null;
+      for(const w in S.planets){const p=S.planets[w];const held=S.supply?G.massFrom(minBal(w),S.supply,C):0;
+        p.mass=Math.max(p.src==='free'?C.FREE_MASS:0,held);if(p.src!=='free')p.holdSince=S.win[w]?S.win[w].since:null;
+        G.tickPlanet(p,S.tick,t,C,ds);
         if(!S.lifeWinner&&p.stage===C.STAGES[C.STAGES.length-1].name&&p.eligible){S.lifeWinner=w;S.lifeAt=t;}}
-      S.snaps={}; // new min-window per tick
-      for(const w in S.planets){const b=S.lastBal&&S.lastBal[w];if(b)S.snaps[w]=b;}
     }if(n)save();return n;}
   function recordBal(bal){S.lastBal=bal;}
   function canFreeBurn(w){const day=Math.floor((now()+8*3600e3)/86400e3);return (S.freeBurns[w]||-1)!==day&&C.FREE_BURNS_PER_DAY>0;}
@@ -55,5 +62,5 @@ function create(db,save,opts={}){
     const p=S.planets[w];const pendingWeight=p?p.weight-(p.paidWeight||0):0;const tw=Object.values(S.planets).reduce((a,q)=>a+(q.weight-(q.paidWeight||0)),0);
     return{wallet:w,paidLamports:total,carryLamports:S.carry[w]||0,pendingWeight:+pendingWeight.toFixed(4),pendingShare:tw?+(pendingWeight/tw).toFixed(6):0,history:rows.reverse()};}
   function leaderboard(){return Object.values(S.planets).map(pub).sort((a,b)=>b.weight-a.weight||b.mass-a.mass).slice(0,100);}
-  return{C,S,snapshot,recordBal,advance,applyBurn,canFreeBurn,closeEpoch,execute,pub,earnings,leaderboard,ensure};}
+  return{C,S,setDaySeed,minBal,snapshot,recordBal,advance,applyBurn,canFreeBurn,closeEpoch,execute,pub,earnings,leaderboard,ensure};}
 module.exports={create};

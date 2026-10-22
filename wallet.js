@@ -17,7 +17,7 @@ function adapter(e){if(e.legacy){const p=e.legacy;return{name:e.name,async conne
   const w=e.std,f=w.features;let acct=null;
   return{name:e.name,async connect(){const r=await f['standard:connect'].connect();acct=(r.accounts||w.accounts||[]).find(a=>(a.chains||[]).some(c=>String(c).startsWith('solana:')))||(r.accounts||w.accounts)[0];if(!acct)throw new Error('No Solana account in this wallet.');this.address=acct.address;return acct.address;},
     async signMessage(m){const [o]=await f['solana:signMessage'].signMessage({account:acct,message:m});return o.signature;},
-    async signAndSend(tx,chain){const ft=f['solana:signAndSendTransaction'];if(!ft)throw new Error('This wallet cannot send transactions here.');const [o]=await ft.signAndSendTransaction({account:acct,chain:'solana:'+(chain||'devnet'),transaction:tx.serialize({requireAllSignatures:false,verifySignatures:false})});return b58(o.signature);},
+    async signAndSend(tx,chain){const ft=f['solana:signAndSendTransaction'];if(!ft)throw new Error('This wallet cannot send transactions here.');const [o]=await ft.signAndSendTransaction({account:acct,chain:'solana:'+(chain==='mainnet-beta'?'mainnet':chain||'devnet'),transaction:tx.serialize({requireAllSignatures:false,verifySignatures:false})});return b58(o.signature);},
     async disconnect(){const d=f['standard:disconnect'];if(d)try{await d.disconnect();}catch(x){}}};}
 const b58=b=>{const A='123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';let d=[0];for(const x of b){let c=x;for(let j=0;j<d.length;j++){c+=d[j]<<8;d[j]=c%58;c=c/58|0;}while(c){d.push(c%58);c=c/58|0;}}let s='';for(const x of b){if(x)break;s+='1';}for(let i=d.length-1;i>=0;i--)s+=A[d[i]];return s;};
 const here=()=>location.href.split('#')[0],enc=encodeURIComponent;

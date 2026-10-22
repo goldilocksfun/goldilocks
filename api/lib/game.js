@@ -23,12 +23,14 @@ function config(){return{
   EPOCH_ANCHOR_MS:num('EPOCH_ANCHOR_MS',Date.UTC(2026,0,1,12,0,0)), // 20:00 Asia/Taipei
 };}
 // Initial orbit: identical draw order to planets.js planetType (r() kind, r() au).
-function initialAu(w){const r=rng(hash(w));r();return .82+r()*.5;}
-function orbitParams(w,C){const g=rng(hash(w+'orbit'));return{ecc:C.ECC_MIN+g()*(C.ECC_MAX-C.ECC_MIN),phase:g()*Math.PI*2,period:C.ECC_PERIOD_TICKS*(.7+g()*.6)};}
+// seed: recent blockhash at planet creation. Empty seed keeps the address-only orbit (site preview, legacy planets).
+function initialAu(w,seed){const r=rng(hash(w+(seed?':'+seed:'')));r();return .82+r()*.5;}
+function orbitParams(w,C,seed){const g=rng(hash(w+'orbit'+(seed?':'+seed:'')));return{ecc:C.ECC_MIN+g()*(C.ECC_MAX-C.ECC_MIN),phase:g()*Math.PI*2,period:C.ECC_PERIOD_TICKS*(.7+g()*.6)};}
 // Secular drift for a tick, deterministic from wallet and tick index, biased so planets wander out of the zone.
-function driftAt(w,tick,C){const h=crypto.createHash('sha256').update(w+':'+tick).digest();const u=h.readUInt32BE(0)/4294967296;const bias=(rng(hash(w+'bias'))()<.5?-1:1)*.35;return C.DRIFT_MAX*Math.max(-1,Math.min(1,(u*2-1)+bias));}
+// daySeed: recent blockhash fetched each Taipei day, unknown in advance, so wallets cannot be ground for a favourable path.
+function driftAt(w,tick,C,daySeed,seed){const h=crypto.createHash('sha256').update(w+':'+tick+(daySeed?':'+daySeed:'')).digest();const u=h.readUInt32BE(0)/4294967296;const bias=(rng(hash(w+'bias'+(seed?':'+seed:'')))()<.5?-1:1)*.35;return C.DRIFT_MAX*Math.max(-1,Math.min(1,(u*2-1)+bias));}
 // Instantaneous distance including eccentricity oscillation.
-function distance(p,tick,C){const o=orbitParams(p.wallet,C);return p.a*(1+o.ecc*Math.sin(o.phase+2*Math.PI*tick/o.period));}
+function distance(p,tick,C){const o=orbitParams(p.wallet,C,p.seed);return p.a*(1+o.ecc*Math.sin(o.phase+2*Math.PI*tick/o.period));}
 const th=C=>C.TICK_HOURS||C.TICK_MS/3600e3;
 const zoneOf=(d,C)=>d<C.HZ_IN?'hot':d>C.HZ_OUT?'cold':'habitable';
 function stageOf(hours,C){let s=C.STAGES[0];for(const x of C.STAGES)if(hours>=x.hours)s=x;return s.name;}
@@ -37,9 +39,9 @@ function massFrom(bal,supply,C){if(!supply||!bal)return 0;const bps=Number(BigIn
   if(bps<C.MASS_UNIT_BPS)return 0;const b=Math.min(bps,C.MASS_CAP_BPS);
   if(C.MASS_CURVE==='log')return +(1+Math.log2(b/C.MASS_UNIT_BPS)*(C.MASS_CAP_BPS/C.MASS_UNIT_BPS-1)/Math.log2(C.MASS_CAP_BPS/C.MASS_UNIT_BPS)).toFixed(4);
   return +(b/C.MASS_UNIT_BPS).toFixed(4);}
-function newPlanet(w,src,now){return{wallet:w,src,a:initialAu(w),created:now,massAt:0,mass:0,holdSince:null,zoneTicks:0,lifeTicks:0,weight:0,stage:'Barren',burns:[],lastTick:-1,zone:null,d:null};}
+function newPlanet(w,src,now,seed){return{wallet:w,src,seed:seed||null,a:initialAu(w,seed),created:now,massAt:0,mass:0,holdSince:null,zoneTicks:0,lifeTicks:0,weight:0,stage:'Barren',burns:[],lastTick:-1,zone:null,d:null};}
 // One accounting tick for one planet. Returns weight earned this tick.
-function tickPlanet(p,tick,now,C){p.a=p.a*(1+driftAt(p.wallet,tick,C));p.a=Math.max(.3,Math.min(3,p.a));const d=distance(p,tick,C);p.d=+d.toFixed(5);p.zone=zoneOf(d,C);p.lastTick=tick;
+function tickPlanet(p,tick,now,C,daySeed){p.a=p.a*(1+driftAt(p.wallet,tick,C,daySeed,p.seed));p.a=Math.max(.3,Math.min(3,p.a));const d=distance(p,tick,C);p.d=+d.toFixed(5);p.zone=zoneOf(d,C);p.lastTick=tick;
   const eligible=p.mass>0&&(p.src==='free'||(p.holdSince!=null&&now-p.holdSince>=C.MIN_HOLD_MS));p.eligible=eligible;let w=0;
   if(p.zone==='habitable'&&p.mass>0){p.zoneTicks++;p.lifeTicks++;if(eligible){w=p.mass;p.weight+=w;}}
   else if(p.lifeTicks>0)p.lifeTicks=Math.max(0,p.lifeTicks-2); // leaving the zone erodes evolution progress
@@ -57,5 +59,6 @@ function computeEpoch({weights,poolLamports,burnLamports=0,carry={},jackpotBefor
   let jackpot=jackpotBefore+jp+dust;if(tot===0)for(const w in shares)delete shares[w];let award=null;
   if(lifeWinner&&jackpot>0){award={wallet:lifeWinner,lamports:jackpot};pay[lifeWinner]=(pay[lifeWinner]||0)+jackpot;jackpot=0;}
   return{pool,burn:Math.floor(burnLamports),hz,jp,ops,dust,totalWeight:tot,shares,pay,carry:newCarry,jackpot,award};}
+const dayOf=t=>Math.floor((t+8*3600e3)/86400e3); // Taipei calendar day
 const epochIndex=(t,C)=>Math.floor((t-C.EPOCH_ANCHOR_MS)/C.EPOCH_MS);
-module.exports={th,hash,rng,config,initialAu,orbitParams,driftAt,distance,zoneOf,stageOf,massFrom,newPlanet,tickPlanet,burn,computeEpoch,epochIndex};
+module.exports={th,hash,rng,config,initialAu,orbitParams,driftAt,distance,zoneOf,stageOf,massFrom,newPlanet,tickPlanet,burn,computeEpoch,epochIndex,dayOf};

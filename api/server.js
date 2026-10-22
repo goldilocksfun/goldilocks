@@ -106,7 +106,9 @@ const EXCL=new Set(String(process.env.EXCLUDE_WALLETS||'').split(',').map(s=>s.t
 async function doSnapshot(){if(!chain||!GCFG.mint)return null;const [bal,sup]=await Promise.all([chain.holders(GCFG.mint),chain.supply(GCFG.mint)]);for(const x of EXCL)delete bal[x];E.snapshot(bal,sup);return{holders:Object.keys(bal).length,supply:sup};}
 async function doEpoch(idx,pool){const r=E.closeEpoch(idx,pool!=null?pool:GCFG.feePool);if(r.already)return r;
   const mode=GCFG.payoutMode==='devnet'&&GCFG.cluster!=='mainnet-beta'?'devnet':'dry';await E.execute(r.epoch,mode,(w,l,onSig)=>chain.transfer(treasury,w,l,onSig),chain&&chain.sigState);return r;}
-if(require.main===module){setInterval(()=>{try{E.advance();}catch(e){console.error('tick',e.message);}},Math.min(10e3,E.C.TICK_MS/2)).unref();
+// Daily drift seed: a recent blockhash recorded once per Taipei day (published in /api/seeds for audit).
+async function ensureSeed(){const day=G.dayOf(Date.now());if(E.S.seeds&&E.S.seeds[day]||!chain)return;const {blockhash}=await chain.conn.getLatestBlockhash('finalized');E.setDaySeed(day,blockhash);}
+if(require.main===module){setInterval(async()=>{try{await ensureSeed().catch(e=>console.error('seed',e.message));E.advance();}catch(e){console.error('tick',e.message);}},Math.min(10e3,E.C.TICK_MS/2)).unref();
   if(GCFG.mint){const f=()=>doSnapshot().catch(e=>console.error('snap',e.message));f();setInterval(f,GCFG.snapMs).unref();}
   if(E.S.genesisEpoch==null){E.S.genesisEpoch=G.epochIndex(Date.now(),E.C);save();}
   let busy=false;if(GCFG.autoEpoch)setInterval(async()=>{if(busy)return;const idx=G.epochIndex(Date.now(),E.C)-1;const last=E.S.epochs.length?E.S.epochs[E.S.epochs.length-1].idx:E.S.genesisEpoch-1;
@@ -124,6 +126,7 @@ async function gameRoute(req,res,u,p,ip){
   let m;
   if((m=p.match(/^\/api\/planet\/([^/]+)$/))&&req.method==='GET'){const w=m[1];if(!isWallet(w))return send(req,res,400,{error:'Invalid wallet.'});const pl=E.S.planets[w];if(!pl)return send(req,res,404,{error:'No planet for this wallet yet.',initialAu:+G.initialAu(w).toFixed(5)});return send(req,res,200,E.pub(pl));}
   if((m=p.match(/^\/api\/earnings\/([^/]+)$/))&&req.method==='GET'){if(!isWallet(m[1]))return send(req,res,400,{error:'Invalid wallet.'});return send(req,res,200,E.earnings(m[1]));}
+  if(p==='/api/seeds'&&req.method==='GET')return send(req,res,200,{seeds:E.S.seeds||{}});
   if(p==='/api/leaderboard'&&req.method==='GET')return send(req,res,200,{planets:E.leaderboard()});
   if(p==='/api/epochs'&&req.method==='GET')return send(req,res,200,{jackpot:E.S.jackpot,epochs:E.S.epochs.slice(-30).reverse().map(e=>({idx:e.idx,closedAt:e.closedAt,pool:e.pool,burn:e.burn,hz:e.hz,jackpotIn:e.jackpotIn,ops:e.ops,totalWeight:e.totalWeight,jackpotAfter:e.jackpotAfter,award:e.award,payouts:e.payouts.map(x=>({wallet:x.wallet,lamports:x.lamports,status:x.status,sig:x.sig})),carry:e.carry}))});
   if(p==='/api/thruster/nonce'&&req.method==='POST'){if(limited(ip,'tn',30,600e3))return send(req,res,429,{error:'Too many tries.'});const {wallet,dir}=await body(req);if(!isWallet(wallet)||!['in','out'].includes(dir))return send(req,res,400,{error:'Invalid request.'});
