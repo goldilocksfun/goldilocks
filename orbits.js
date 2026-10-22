@@ -172,6 +172,11 @@ function frame(now){requestAnimationFrame(frame);if(document.hidden)return;const
 addEventListener('resize',size,{passive:true});size();$('#hint').textContent=HINT;loadReal().finally(()=>{const w=new URLSearchParams(location.search).get('w');if(w&&/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)){$('#sq').value=w;$('#sf').requestSubmit()}});requestAnimationFrame(frame);
 window.__orbits={S,setPlay,exitPlanet,get demo(){return demo},select,get real(){return real},demoOn:()=>{$('#demo').click()}};
 
-// Pre-warm every shader program and buffer (close-up planet, rings, moons, sun LOD) so the first fly-in has no compile hitch.
-{const warm=()=>{try{const st=[];scene.traverse(o=>{st.push([o,o.visible]);o.visible=true});renderer.compile(scene,cam);const rt=new THREE.WebGLRenderTarget(32,32);renderer.setRenderTarget(rt);renderer.render(scene,cam);renderer.setRenderTarget(null);rt.dispose();st.forEach(([o,v])=>o.visible=v)}catch(e){}};
- if(document.readyState==='complete')setTimeout(warm,300);else addEventListener('load',()=>setTimeout(warm,300),{once:true})}
+// Pre-warm shader programs one object per idle slot (parallel compile when available) so the first fly-in has no compile hitch and load has no long task.
+{const warm=()=>{const seen=new Set(),q=[];scene.traverse(o=>{if(o.material&&!seen.has(o.material)){seen.add(o.material);q.push(o)}});
+ const idle=window.requestIdleCallback||(f=>setTimeout(()=>f({timeRemaining:()=>8}),60));
+ const step=()=>{const o=q.shift();if(!o)return;const ch=[];for(let p=o;p;p=p.parent){ch.push([p,p.visible]);p.visible=true}
+  try{if(renderer.compileAsync){renderer.compileAsync(o,cam,scene).catch(()=>{})}else renderer.compile(o,cam,scene)}catch(e){}
+  ch.forEach(([p,v])=>p.visible=v);idle(step,{timeout:1000})};
+ idle(step,{timeout:1000})};
+ if(document.readyState==='complete')setTimeout(warm,500);else addEventListener('load',()=>setTimeout(warm,500),{once:true})}
