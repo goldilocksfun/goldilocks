@@ -95,3 +95,4 @@ html,body,footer,.cl-foot,.flat,#actions{background-color:#020308}
 .lr-grid dt{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin-bottom:10px}.lr-grid dd{margin:0;font-size:14px;line-height:1.6;color:var(--dim)}
 @media(max-width:1000px){.lr-grid{grid-template-columns:1fr 1fr}.lr-grid div+div{border-left:0;padding-left:0}.lrules{padding:20px 22px 90px}}
 @media(max-width:600px){.lr-grid{grid-template-columns:1fr}}
+.wcard{max-height:calc(100vh - 32px);overflow-y:auto}
