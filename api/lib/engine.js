@@ -47,7 +47,8 @@ function create(db,save,opts={}){
     for(const w in weights)S.planets[w].paidWeight=S.planets[w].weight;S.carry=r.carry;S.jackpot=r.jackpot;S.burnPool=0;if(r.award)S.lifeAwarded=true;
     const e={idx,closedAt:now(),pool:r.pool,burn:r.burn,hz:r.hz,jackpotIn:r.jp,ops:r.ops,totalWeight:r.totalWeight,jackpotAfter:r.jackpot,award:r.award,weights,shares:r.shares,
       payouts:Object.entries(r.pay).map(([wallet,lamports])=>({wallet,lamports,status:'pending',sig:null})),carry:r.carry};
-    S.epochs.push(e);save();return{epoch:e};}
+    S.epochs.push(e);for(const x of S.epochs.slice(0,-14)){delete x.weights;delete x.shares;} // keep state bounded; payouts stay as the ledger
+    save();return{epoch:e};}
   // Execute pending payouts. mode dry: mark dry-run. mode devnet: real transfers via send(wallet,lamports). Retries only unsent rows.
   // Execute pending payouts. mode dry: mark dry-run. mode devnet: real transfers via send(wallet,lamports,onSig).
   // The signature is stored before sending. A row with a stored signature is resent only after state(sig) proves the old one can never land.
