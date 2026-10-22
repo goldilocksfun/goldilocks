@@ -1,0 +1,70 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Goldilocks | Only the habitable survive</title>
+<link rel="preload" href="fonts/space-grotesk-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/instrument-serif-latin-400-italic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="icon" type="image/svg+xml" href="favicon.svg"><meta name="theme-color" content="#020308">
+<meta name="description" content="A live planet formation simulation on Solana. Every wallet is a world. Only the habitable earn.">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<meta property="og:type" content="website"><meta property="og:title" content="Goldilocks | Only the habitable survive"><meta property="og:description" content="A live planet formation simulation on Solana. Every wallet is a world.">
+<meta property="og:image" content="assets/og.jpg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Goldilocks"><meta name="twitter:description" content="Every wallet is a world. Only the habitable earn."><meta name="twitter:image" content="assets/og.jpg"><link rel="stylesheet" href="style.css">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","three/addons/":"./vendor/jsm/"}}</script>
+</head><body class="loading">
+<div id="loader"><div class="l-top"><span>GOLDILOCKS</span><span>SEASON 01</span></div><div class="l-mid"><div class="l-num"><span id="lnum">000</span></div><svg class="l-orb" viewBox="0 0 200 200"><circle cx="100" cy="100" r="80"/><circle cx="100" cy="100" r="52" class="z"/><circle cx="100" cy="100" r="6" class="s"/><g><circle cx="180" cy="100" r="3.5" class="p"/></g></svg></div><div class="l-bar"><i id="lbar"></i></div><div class="l-bot"><span id="lstage">Seeding molecular cloud</span><span>G2V / 5778 K</span></div></div>
+<canvas id="gl"></canvas>
+<div class="grid-ov" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+<div class="crops" aria-hidden="true"><b class="tl"></b><b class="tr"></b><b class="bl"></b><b class="br"></b></div>
+<div class="lbx" aria-hidden="true"><i></i><i></i></div><div id="cur"><i></i></div><div id="cur-dot"></div>
+<header class="nav"><a class="logo" href="#"><svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="14" class="ring"/><circle cx="20" cy="20" r="2.2" class="sun"/><g class="orb"><circle cx="34" cy="20" r="3.2" class="pl"/></g></svg>Goldilocks</a>
+<nav><a href="#actions" data-h>Actions</a><a href="#sim" data-h>Live system</a><button id="snd" data-h aria-label="Sound"><audio id="theme" loop preload="none"></audio><span class="eq"><i></i><i></i><i></i><i></i></span><em>Sound off</em></button><a href="#join" class="pill" data-h>Enter season</a></nav></header>
+<div class="hud">
+ <div class="hud-l"><span class="mono dim">CH</span><span id="chap" class="mono">00</span><span id="chapname" class="mono">Nebula</span><div class="bar"><i id="prog"></i><s style="left:11%"></s><s style="left:24%"></s><s style="left:38%"></s><s style="left:51%"></s><s style="left:64%"></s><s style="left:87%"></s></div></div>
+ <div class="hud-r" id="readout">
+  <div><span>Orbital radius</span><b id="r-au">0.00</b><em>AU</em></div>
+  <div><span>Equilibrium temp</span><b id="r-k">000</b><em>K</em></div>
+  <div><span>Earth similarity</span><b id="r-esi">0.00</b><em>ESI</em></div>
+  <div><span>Biosignature</span><b id="r-life">00</b><em>pct</em></div>
+  <div class="zone-flag" id="r-zone">Outside zone</div>
+ </div>
+ <div class="hud-c mono dim" id="coords">RA 14h 29m 43s  DEC 62 40 46</div>
+</div>
+<main>
+<section id="story">
+  <div class="panel" data-a="0" data-b=".1"><p class="kicker">Season 01 / G2V main sequence</p><h1 class="split">Every wallet<br>is a <span class="serif">world.</span></h1><p class="sub">A live planet formation simulation. Scroll to watch a solar system be born.</p><div class="scrollcue mono"><i></i>Scroll</div></div>
+  <div class="panel" data-a=".11" data-b=".23"><p class="kicker">01 / Collapse</p><h2 class="split">Gravity <span class="serif">wins.</span></h2><p class="sub">A cold molecular cloud folds in on itself. Pressure climbs until fusion ignites.</p></div>
+  <div class="panel" data-a=".24" data-b=".37"><p class="kicker">02 / Accretion</p><h2 class="split">Dust becomes <span class="serif">worlds.</span></h2><p class="sub">Each holder is a planet with a real orbit, real mass and real physics.</p></div>
+  <div class="panel" data-a=".38" data-b=".5"><p class="kicker">03 / Habitable zone</p><h2 class="split">Not too hot.<br>Not too <span class="serif">cold.</span></h2><p class="sub">Only planets inside the zone earn SOL. Everyone else drifts.</p></div>
+  <div class="panel" data-a=".51" data-b=".63"><p class="kicker">04 / Migration</p><h2 class="split">Your planet <span class="serif">moves in.</span></h2><p class="sub">Orbits decay. Eccentricity shifts. Position is everything.</p></div>
+  <div class="panel" data-a=".64" data-b=".85"><p class="kicker">05 / Abiogenesis</p><h2 class="split">Air. Water. <span class="serif">Life.</span></h2>
+    <div class="meters"><div><span>Atmosphere</span><b><i id="m1"></i></b><em id="v1">0</em></div><div><span>Ocean</span><b><i id="m2"></i></b><em id="v2">0</em></div><div><span>Life</span><b><i id="m3"></i></b><em id="v3">0</em></div></div></div>
+  <div class="panel center" data-a=".87" data-b="1.01"><p class="kicker gold">First life detected</p><h2 class="split big"><span class="serif goldtxt">Jackpot.</span></h2><p class="sub">The first planet to reach full life takes the season pot. No lottery. Pure orbital mechanics.</p></div>
+</section>
+
+<div class="seam" aria-hidden="true"></div><section id="actions" class="flat">
+ <div class="sec-head"><p class="kicker">Interventions</p><h2 class="split">Bend the <span class="serif">physics.</span></h2><p class="sub">Five ways to change your fate. Each one costs SOL and every result is on chain.</p></div>
+ <div class="grid">
+ <article class="card" data-h><div class="cv"><canvas data-anim="thruster"></canvas></div><div class="meta"><span class="mono">A.01</span><span class="mono dim">Orbit</span></div><h3>Thruster Burn</h3><p>Nudge your orbit inward or outward.</p></article>
+ <article class="card" data-h><div class="cv"><canvas data-anim="comet"></canvas></div><div class="meta"><span class="mono">A.02</span><span class="mono dim">Ocean</span></div><h3>Comet Delivery</h3><p>Crash ice into your world. Instant oceans.</p></article>
+ <article class="card" data-h><div class="cv"><canvas data-anim="shield"></canvas></div><div class="meta"><span class="mono">A.03</span><span class="mono dim">Defense</span></div><h3>Magnetic Shield</h3><p>Deflect flares that strip atmospheres.</p></article>
+ <article class="card" data-h><div class="cv"><canvas data-anim="seed"></canvas></div><div class="meta"><span class="mono">A.04</span><span class="mono dim">Life</span></div><h3>Asteroid Seed</h3><p>Drop organics. Accelerate the spark.</p></article>
+ <article class="card" data-h><div class="cv"><canvas data-anim="tug"></canvas></div><div class="meta"><span class="mono">A.05</span><span class="mono dim">Rivals</span></div><h3>Gravity Tug</h3><p>Pull a rival out of the zone.</p></article>
+ </div></section>
+
+<section id="sim" class="flat">
+ <div class="sec-head"><p class="kicker">Live system preview</p><h2 class="split">Drop a planet. <span class="serif">Watch it fly.</span></h2><p class="sub">Click inside the field to spawn a world. Worlds that hold the zone glow.</p></div>
+ <div class="simwrap" data-h><canvas id="simc"></canvas>
+  <div class="simstats"><div><span>Planets</span><b id="s1">0</b></div><div><span>In zone</span><b id="s2">0</b></div><div><span>Star</span><b>G2V</b></div><div><span>Season</span><b>14 d</b></div></div>
+  <div class="simtag mono dim">Newtonian n body / dt 0.004</div></div>
+</section>
+
+<section id="join" class="flat cta">
+ <svg class="orbitsvg" viewBox="0 0 800 800" aria-hidden="true"><circle cx="400" cy="400" r="250"/><circle cx="400" cy="400" r="330" class="hz"/><circle cx="400" cy="400" r="390"/><g class="spin"><circle cx="730" cy="400" r="7" class="pl"/></g><circle cx="400" cy="400" r="18" class="sun"/></svg>
+ <p class="kicker gold">Season 01 / Fourteen days</p><h2 class="split huge">Find your <span class="serif">orbit.</span></h2><p class="sub">One star. One zone. One living world.</p><a class="pill big" href="#join" data-h>Enter season 01</a></section>
+</main>
+<footer>
+ <div class="f-top"><div class="f-cols mono dim"><span>Star G2V</span><span>Season 01</span><span>Fourteen days</span></div><a class="logo" href="#"><svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="14" class="ring"/><circle cx="20" cy="20" r="2.2" class="sun"/><g class="orb"><circle cx="34" cy="20" r="3.2" class="pl"/></g></svg>Goldilocks</a><div class="links"><a href="#" data-h>X</a><a href="#" data-h>GitHub</a></div></div>
+ <div class="f-big serif">Goldilocks</div>
+ <div class="f-bot mono dim"><span>Simulation is illustrative. Not financial advice.</span><span>Solana / Season 01</span></div>
+</footer>
+<script src="vendor/gsap.min.js"></script><script src="vendor/ScrollTrigger.min.js"></script><script src="vendor/lenis.min.js"></script>
+<script type="module" src="main.js"></script></body></html>

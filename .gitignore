@@ -1,0 +1,7 @@
+old_v*/
+shots/
+brand/
+*.py
+__pycache__/
+.DS_Store
+*.env
