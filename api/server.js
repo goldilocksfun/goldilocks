@@ -13,6 +13,8 @@ const NONCE_TTL=10*60e3;
 
 // ---------- store (JSON file, atomic writes) ----------
 fs.mkdirSync(path.dirname(DATA),{recursive:true});
+// One-off wipe (for clearing test data): set PURGE_ON_START=1 for a single boot, then remove it.
+if(process.env.PURGE_ON_START==='1'){try{fs.unlinkSync(DATA);console.log('store purged');}catch(e){}}
 let db={claims:{},codes:{},seq:0};try{db=Object.assign(db,JSON.parse(fs.readFileSync(DATA,'utf8')));}catch(e){}
 let dirty=false;const save=()=>{dirty=true;};
 setInterval(()=>{if(!dirty)return;dirty=false;const tmp=DATA+'.tmp';fs.writeFileSync(tmp,JSON.stringify(db));fs.renameSync(tmp,DATA);},1000).unref();
