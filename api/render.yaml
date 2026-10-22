@@ -1,0 +1,16 @@
+# Reference spec for the claim API on Render (rootDir api).
+services:
+  - type: web
+    name: goldilocks-api
+    runtime: node
+    plan: starter
+    region: oregon
+    rootDir: api
+    buildCommand: npm ci
+    startCommand: node server.js
+    healthCheckPath: /health
+    disk: {name: data, mountPath: /data, sizeGB: 1}
+    envVars:
+      - {key: DATA_FILE, value: /data/claims.json}
+      - {key: TRUST_PROXY, value: "1"}
+      - {key: ALLOWED_ORIGINS, value: "https://goldilockszone.fun,http://goldilockszone.fun,https://www.goldilockszone.fun,https://goldilocksfun.github.io"}

@@ -1,0 +1,1 @@
+{"name":"goldilocks-api","version":"0.1.0","private":true,"description":"Goldilocks free planet claim API","main":"server.js","scripts":{"start":"node server.js","test":"node test-e2e.js"},"engines":{"node":">=18"},"dependencies":{"bs58":"^6.0.0","tweetnacl":"^1.0.3"}}
