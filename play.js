@@ -34,17 +34,24 @@ async function mine(){if(!W)return;let p;try{p=await api('/api/planet/'+W)}catch
  $('#eEst').textContent=G.feePool||G.burnPool?sol(Math.floor(((G.feePool||0)*G.split[0]+G.burnPool)*e.pendingShare)):'Depends on volume';$('#eCarry').textContent=sol(e.carryLamports);$('#eNext').textContent=nextEpoch();
  $('#pays').innerHTML=e.history.map(h=>'<li><span>Epoch '+h.epoch+' '+sol(h.lamports)+'</span><span>'+(h.sig?link(h.sig):h.status)+'</span></li>').join('');
  const own=wal&&wal.address===W;['#bIn','#bOut'].forEach(s=>$(s).disabled=!own);if(!own)$('#tNote').textContent='Connect this wallet to steer.'}
-async function burn(dir){if(!wal||wal.address!==W)return;const B=$(dir==='in'?'#bIn':'#bOut');B.classList.add('busy');
+let burning=false;const nice=e=>{const m=String((e&&e.message)||e||'');return /^Not enough SOL/.test(m)?m:/reject|denied|cancel|declin/i.test(m)?'Burn cancelled in your wallet. Nothing was charged.':/insufficient|0x1\b|debit/i.test(m)?'Not enough SOL in this wallet for the burn and network fee.':/failed to fetch|failed to get|429|network/i.test(m)?'The network is busy. Nothing was charged. Try again in a moment.':m||'Burn cancelled.';};
+async function burn(dir){if(burning||!wal||wal.address!==W)return;burning=true;const B=$(dir==='in'?'#bIn':'#bOut');B.classList.add('busy');['#bIn','#bOut'].forEach(s=>$(s).disabled=true);const who=wal;
  try{const n=await api('/api/thruster/nonce',{method:'POST',body:JSON.stringify({wallet:W,dir})});let r;
-  if(n.free){msg('Approve the burn signature in your wallet. Free today, no transaction.');const sig=await wal.signMessage(new TextEncoder().encode(n.memo));
+  if(n.free){msg('Approve the burn signature in your wallet. Free today, no transaction.');const sig=await who.signMessage(new TextEncoder().encode(n.memo));
+   if(wal!==who||who.address!==W)throw new Error('Wallet changed during the burn. Connect again and retry.');
    r=await api('/api/thruster/verify',{method:'POST',body:JSON.stringify({wallet:W,nonce:n.nonce,messageSignature:btoa(String.fromCharCode(...new Uint8Array(sig)))})});}
-  else{const S=window.solanaWeb3;if(!S)throw new Error('Transaction support is still loading.');if(!wal.signAndSend)throw new Error('This wallet cannot send transactions here.');
-   msg('Approve '+(n.lamports/1e9)+' SOL on '+n.cluster+' in your wallet.');if(!G.clientRpc)throw new Error('Burns are not open on this network yet.');const c=new S.Connection(G.clientRpc,'confirmed');
-   const pk=new S.PublicKey(W);const tx=new S.Transaction().add(S.SystemProgram.transfer({fromPubkey:pk,toPubkey:new S.PublicKey(n.treasury),lamports:n.lamports}),new S.TransactionInstruction({keys:[{pubkey:pk,isSigner:true,isWritable:false}],programId:new S.PublicKey(n.memoProgram),data:new TextEncoder().encode(n.memo)}));
-   tx.feePayer=pk;tx.recentBlockhash=(await c.getLatestBlockhash()).blockhash;const sig=await wal.signAndSend(tx,n.cluster);msg('Confirming on chain.');
-   for(let i=0;i<20;i++){try{r=await api('/api/thruster/verify',{method:'POST',body:JSON.stringify({wallet:W,nonce:n.nonce,signature:sig})});break}catch(e){if(!/not found/i.test(e.message)||i===19)throw e;await new Promise(z=>setTimeout(z,1500))}}}
+  else{const S=window.solanaWeb3;if(!S)throw new Error('Transaction support is still loading.');if(!G.clientRpc)throw new Error('Burns are not open on this network yet.');if(!who.signTx&&!who.signAndSend)throw new Error('This wallet cannot send transactions here.');
+   const c=new S.Connection(G.clientRpc,'confirmed');const pk=new S.PublicKey(W);
+   const bal=await c.getBalance(pk);if(bal<n.lamports+10000)throw new Error('Not enough SOL on '+n.cluster+'. A burn needs '+(n.lamports/1e9)+' SOL plus a small network fee.');
+   msg('Approve '+(n.lamports/1e9)+' SOL on '+n.cluster+' in your wallet.');
+   const tx=new S.Transaction().add(S.SystemProgram.transfer({fromPubkey:pk,toPubkey:new S.PublicKey(n.treasury),lamports:n.lamports}),new S.TransactionInstruction({keys:[{pubkey:pk,isSigner:true,isWritable:false}],programId:new S.PublicKey(n.memoProgram),data:new TextEncoder().encode(n.memo)}));
+   const bh=await c.getLatestBlockhash();tx.feePayer=pk;tx.recentBlockhash=bh.blockhash;let sig;
+   // Sign in the wallet, then send through this site's RPC, so the payment always lands on the game's network whatever network the wallet is set to.
+   if(who.signTx){const raw=await who.signTx(tx,n.cluster);sig=await c.sendRawTransaction(raw,{preflightCommitment:'confirmed'});}else sig=await who.signAndSend(tx,n.cluster);
+   msg('Confirming on chain.');
+   for(let i=0;i<30;i++){try{r=await api('/api/thruster/verify',{method:'POST',body:JSON.stringify({wallet:W,nonce:n.nonce,signature:sig})});break}catch(e){if(!/not found|being checked/i.test(e.message)||i===29)throw e;await new Promise(z=>setTimeout(z,1500))}}}
   msg('Burn applied. Orbit '+r.before.toFixed(3)+' to '+r.after.toFixed(3)+' AU.','ok');await refresh();}
- catch(e){msg((e&&e.message)||'Burn cancelled.','err')}B.classList.remove('busy')}
+ catch(e){msg(nice(e),'err')}finally{burning=false;B.classList.remove('busy');const own=wal&&wal.address===W;['#bIn','#bOut'].forEach(s=>$(s).disabled=!own);}}
 async function refresh(){try{await season();await Promise.all([mine(),board(),ledger()])}catch(e){msg(API?'Live data is unavailable right now. Try again shortly.':'The game opens at launch.','err')}}
 function view(w){W=w;history.replaceState(null,'','?wallet='+w);refresh()}
 $('#bConnect').onclick=async()=>{try{let w=window.__wallets.current();if(!w){w=await window.__wallets.pick();if(!w)return}wal=w;$('#bConnect').textContent=short(w.address);view(w.address)}catch(e){msg(e.message||'Connection cancelled.','err')}};
