@@ -2,7 +2,7 @@
 
 A live planet formation simulation where every wallet is a world.
 
-Each holder is a planet with a real orbit around a real star type. Only planets inside the habitable zone earn. The first planet to reach full life takes the Life jackpot. Seasons last fourteen days. Outcomes come from orbital mechanics, not a lottery.
+Each holder is a planet with a real orbit around a real star type. Only planets inside the habitable zone earn. Every planet that reaches full life within a season shares the Life jackpot by mass. Seasons last one calendar quarter, and the jackpot resets each season. Free planets go live at launch and, like holders, earn only after 24 hours. Payouts below 0.001 SOL carry over and are swept weekly. Outcomes come from orbital mechanics, not a lottery.
 
 Website: https://goldilockszone.fun  
 X: https://x.com/playgoldilocks  
@@ -25,7 +25,7 @@ The game engine that applies these rules is in progress; the site and claim API 
 
 - Free planets: the first 200 wallets to complete the claim get a planet with mass 1. There is no token airdrop.
 - Holder planets: any wallet holding at least 0.01 percent of supply gets a planet, even without a claim.
-- Mass scales linearly with holdings, from 1 at 0.01 percent of supply up to 50 at the 0.5 percent cap. Holdings above 0.5 percent add no mass.
+- Mass scales linearly with holdings, from 1 at 0.01 percent of supply up to 25 at the 0.25 percent cap. Holdings above 0.25 percent add no mass.
 - Holdings count after they have been held for 24 hours.
 - Payouts: planets inside the habitable zone share a daily SOL payout at 20:00 Taipei time (12:00 UTC).
 - Interventions: the first thruster burn each day is free, after that each burn costs 0.01 SOL.

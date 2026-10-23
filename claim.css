@@ -94,3 +94,11 @@ html.rm .rv,html.rm .step,html.rm .pcard{transition:none}
 .xt li.no i{border-color:#ff9a7a}
 .step[aria-disabled="true"] .sbtn{opacity:.35;pointer-events:none}
 #bShare{margin-top:10px}
+.cl-how{padding:40px calc(40px + 3vw) 0;max-width:1300px}
+.cl-how h2{font-size:clamp(30px,3.4vw,46px);font-weight:300;line-height:1.08;letter-spacing:-.01em;margin-bottom:34px}
+.how{list-style:none;display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+.how li{padding:26px 24px 28px;border:1px solid rgba(255,255,255,.07);border-radius:18px;background:linear-gradient(180deg,rgba(14,17,28,.72),rgba(6,8,14,.66));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.how .idx{display:block;color:var(--gold);margin-bottom:18px}.how p{font-size:14.5px;line-height:1.6;color:rgba(235,238,245,.82)}
+.cl-how .rv{transition-delay:.1s}.cl-how.in .rv{opacity:1;transform:none;filter:none}
+@media(max-width:1100px){.how{grid-template-columns:1fr 1fr}}
+@media(max-width:760px){.cl-how{padding:20px 22px 0}.how{grid-template-columns:1fr}.how li{padding:20px 20px;background:linear-gradient(180deg,rgba(14,16,26,.94),rgba(7,9,16,.93))}}
