@@ -106,10 +106,10 @@ const hasHandle=()=>/^@?[A-Za-z0-9_]{1,15}$/.test(($('#xIn').value||'').trim());
 function refresh(){const c=state.claim,st=c&&c.status,cfg=state.cfg||{req:{}};const signed=!!state.token||(!!st&&st!=='rejected');const reserved=st==='reserved'||st==='final';const tid=cfg.tweetId;
  setStep('follow',hasHandle()&&LS.get('followed')==='1'?'done':'active');setStep('sign',signed?'done':hasHandle()?'active':'');
  setStep('tasks',reserved?'done':signed&&tid?'active':'');steps.tasks.classList.toggle('unlocked',!!tid&&signed||reserved);steps.tasks.setAttribute('aria-disabled',tid?'false':'true');
- $('#tdesc').textContent=st==='review'?'Submitted for review. Checks are done by hand, usually within a few hours.':st==='rejected'?'Not approved'+(c.reason?': '+c.reason:'')+'. Fix it on X, then sign and verify again.':!tid?'Claim opens when the announcement post is live.':reserved?'All tasks verified.':'Do each task on X, then press Verify. Checks can take a minute to show up.';
+ $('#tdesc').textContent=st==='review'?'Submitted for review. Checks are done by hand, usually within a few hours.':st==='rejected'?'Not approved'+(c.reason?': '+c.reason:'')+'. Fix it on X, then sign and verify again.':!tid?'Claim opens when the announcement post is live.':reserved?'All tasks verified.':'Repost and like the post, then reply or quote it with your code. Then press Verify.';
  for(const k of ['follow','repost','like','reply']){const li=$('#xt [data-t="'+k+'"]');li.hidden=cfg.req[k]===false;li.classList.toggle('ok',!!state.tasks[k]||reserved);li.classList.toggle('no',state.tasks[k]===false)}
  $('#rCode').textContent=state.replyCode||'your code';if(tid){$('#bRt').href='https://x.com/intent/retweet?tweet_id='+tid;$('#bLk').href='https://x.com/intent/like?tweet_id='+tid;
-  $('#bRp').href='https://x.com/intent/post?in_reply_to='+tid+'&text='+encodeURIComponent('Claiming my free Goldilocks planet. '+(state.replyCode||''))}
+  $('#bRp').href='https://x.com/intent/post?in_reply_to='+tid+'&text='+encodeURIComponent('Claiming my free Goldilocks planet. '+(state.replyCode||''));$('#bQt').href='https://x.com/intent/post?url='+encodeURIComponent('https://x.com/playgoldilocks/status/'+tid)+'&text='+encodeURIComponent('Claiming my free Goldilocks planet. '+(state.replyCode||''))}
  const need=c&&c.invitesNeeded!=null?c.invitesNeeded:(cfg.req.invites||0);steps.invite.hidden=need<=0&&!reserved;
  setStep('invite',st==='final'?'done':reserved?'active':'');steps.invite.classList.toggle('unlocked',reserved);$('#inv').textContent=c?(c.qualifiedInvites||0):0;$('#invN').textContent=need;
  if(reserved){$('#refIn').value=refLink(c.code);$('#bShare').hidden=false;
@@ -145,7 +145,7 @@ bS.addEventListener('click',async()=>{if(state.full&&!state.claim){msg('All free
   const sig=await w.signMessage(new TextEncoder().encode(message));
   msg('Verifying signature.');const c=await api('/api/claim',{method:'POST',body:JSON.stringify({wallet:w.address,signature:b64(new Uint8Array(sig)),ref:LS.get('ref')||'',followed:LS.get('followed')==='1'})});
   showPlanet(w.address,false);
-  if(c.status==='signed'){state.token=c.token;state.replyCode=c.replyCode;refresh();msg(state.cfg&&state.cfg.tweetId?'Signed. Now repost, like and reply, then press Verify.':'Signed. Claim opens when the announcement post is live.','ok');return}
+  if(c.status==='signed'){state.token=c.token;state.replyCode=c.replyCode;refresh();msg(state.cfg&&state.cfg.tweetId?'Signed. Repost and like the post, then reply or quote it with your code.':'Signed. Claim opens when the announcement post is live.','ok');return}
   state.claim=c;showPlanet(w.address,true,c.no);refresh();msg('Planet claimed. Welcome to Season 01.','ok');loadStats()}
  catch(e){msg((e&&e.message)||'Something went wrong. Try again.','err')}finally{bS.classList.remove('busy')}});
 $('#bVerify').addEventListener('click',async()=>{if(!state.token){msg('Connect and sign with your wallet first.','err');return}const b=$('#bVerify');b.classList.add('busy');msg('Checking X.');

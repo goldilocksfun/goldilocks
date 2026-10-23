@@ -205,7 +205,7 @@ async function claimRoute(req,res,u,p,ip){
     return send(req,res,200,Object.assign(view(wallet),{tasks:t,ready:true}));}
   if(p.startsWith('/api/admin/claims')){if(!isAdmin(req))return send(req,res,403,{error:'Forbidden.'});
     if(p==='/api/admin/claims'&&req.method==='GET'){const st=u.searchParams.get('status')||'pending';
-      return send(req,res,200,{mode:VERIFY_MODE,tweetId:tweetId(),claims:Object.values(db.reviews).filter(r=>st==='all'||r.status===st).sort((a,b)=>a.created_at<b.created_at?-1:1).map(r=>{const c=db.claims[r.wallet];const by=db.codes[r.ref];
+      return send(req,res,200,{mode:VERIFY_MODE,tweetId:tweetId(),acceptTweetIds:[tweetId(),...String(process.env.CLAIM_TWEET_ID_PREV||'').split(',').filter(Boolean)].filter((x,i,a)=>x&&a.indexOf(x)===i),claims:Object.values(db.reviews).filter(r=>st==='all'||r.status===st).sort((a,b)=>a.created_at<b.created_at?-1:1).map(r=>{const c=db.claims[r.wallet];const by=db.codes[r.ref];
         return{id:r.id,handle:'@'+r.handle,x_user_id:r.xId||null,wallet:r.wallet,code:r.code,ref:r.ref||null,invited_by:by||null,invites:c?c.invites||0:0,qualified_invites:c?c.qinv||0:0,status:r.status,reason:r.reason||null,created_at:r.created_at,reviewed_at:r.reviewed_at||null};})});}
     let m=p.match(/^\/api\/admin\/claims\/([^/]+)\/(approve|reject)$/);if(m&&req.method==='POST'){const r=db.reviews[decodeURIComponent(m[1])];if(!r)return send(req,res,404,{error:'No such review.'});if(r.status!=='pending')return send(req,res,409,{error:'Already '+r.status+'.'});const b=await body(req);
       if(m[2]==='reject'){r.status='rejected';r.reason=String(b.reason||'').slice(0,200);r.reviewed_at=new Date().toISOString();save();return send(req,res,200,r);}

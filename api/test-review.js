@@ -1,6 +1,6 @@
 // Manual review mode: verify queues a review, admin lists, approves (reserve + invite credit) and rejects.
 'use strict';const assert=require('assert');const os=require('os'),path=require('path'),fs=require('fs');
-const dir=fs.mkdtempSync(path.join(os.tmpdir(),'glr'));Object.assign(process.env,{DATA_FILE:dir+'/c.json',CLAIM_TWEET_ID:'2113372352214159852',ADMIN_KEY:'k',CLAIM_VERIFY:'manual',MAX_PLANETS:'200'});
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),'glr'));Object.assign(process.env,{DATA_FILE:dir+'/c.json',CLAIM_TWEET_ID:'2113565792340148710',ADMIN_KEY:'k',CLAIM_VERIFY:'manual',MAX_PLANETS:'200'});
 const nacl=require('tweetnacl');const bs58=(m=>m.default||m)(require('bs58'));const S=require('./server.js');
 let B;const j=async(p,b,adm)=>{const h={'content-type':'application/json'};if(adm)h['x-admin-key']=adm;const r=await fetch(B+p,b!==undefined?{method:'POST',headers:h,body:JSON.stringify(b)}:{headers:h});return{s:r.status,b:await r.json()}};
 const kp=()=>{const k=nacl.sign.keyPair();return{k,w:bs58.encode(k.publicKey)}};

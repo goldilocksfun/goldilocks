@@ -1,6 +1,6 @@
 // Claim flow tests with a mocked X API: follow, sign, repost/like/reply, reservation, qualified invites, one X account per planet, 200 cap with holds.
 'use strict';const assert=require('assert');const os=require('os'),path=require('path'),fs=require('fs');
-const dir=fs.mkdtempSync(path.join(os.tmpdir(),'glc'));Object.assign(process.env,{DATA_FILE:dir+'/c.json',CLAIM_TWEET_ID:'2113372352214159852',X_BEARER_TOKEN:'t',X_VERIFY_APP_KEY:'a',X_VERIFY_APP_SECRET:'b',X_VERIFY_ACCESS_TOKEN:'c',X_VERIFY_ACCESS_SECRET:'d',MAX_PLANETS:'3',ADMIN_KEY:'k',CLAIM_VERIFY:'auto',X_CACHE_MS:'1',X_FOLLOW_CACHE_MS:'1'});
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),'glc'));Object.assign(process.env,{DATA_FILE:dir+'/c.json',CLAIM_TWEET_ID:'2113565792340148710',X_BEARER_TOKEN:'t',X_VERIFY_APP_KEY:'a',X_VERIFY_APP_SECRET:'b',X_VERIFY_ACCESS_TOKEN:'c',X_VERIFY_ACCESS_SECRET:'d',MAX_PLANETS:'3',ADMIN_KEY:'k',CLAIM_VERIFY:'auto',X_CACHE_MS:'1',X_FOLLOW_CACHE_MS:'1'});
 const nacl=require('tweetnacl');const bs58=(m=>m.default||m)(require('bs58'));const S=require('./server.js');
 const U={playgoldilocks:{id:'1',created_at:'2011-01-01T00:00:00Z',f:2000}};const F=new Set(),RT=new Set(),LK=new Set(),RP={};
 const add=(h,id,age,f)=>U[h]={id,created_at:new Date(Date.now()-age*864e5).toISOString(),f};
