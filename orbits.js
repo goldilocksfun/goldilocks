@@ -96,7 +96,7 @@ function makeDemo(){const n=MOB?10000:50000,r=rng(7);const out=[];for(let i=0;i<
 const HINT=MOB?'Tap a planet to inspect it. Pinch to zoom.':'Click a planet to inspect it. Drag to rotate. Scroll to zoom.';
 async function loadReal(){if(!API){$('#smsg').textContent='Claims open soon. Turn on the preview layer to see a full system.';return}
  $('#smsg').textContent='Loading claimed planets.';
- try{const ac=new AbortController();const to=setTimeout(()=>ac.abort(),10000);const r=await fetch(API+'/api/planets',{signal:ac.signal});clearTimeout(to);if(!r.ok)throw new Error('http');const j=await r.json();real=(j.planets||[]).map(x=>Object.assign(paramsFor(x.wallet),{no:x.no}));byW.clear();for(const p of real)byW.set(p.w,p);fill(realPts,real.slice(0,4096),3,.0012);
+ try{const ac=new AbortController();const to=setTimeout(()=>ac.abort(),10000);const r=await fetch(API+'/api/planets',{signal:ac.signal});clearTimeout(to);if(!r.ok)throw new Error('http');const j=await r.json();LAUNCHED=!!j.launched;real=(j.planets||[]).map(x=>{const p=Object.assign(paramsFor(x.wallet),{no:x.no,stage:x.stage||null});if(typeof x.d==='number'){p.au=x.d;p.ga=x.a;p.e=.004;p.zone=x.zone==='habitable';p.eng=1}if(!LAUNCHED){p.reserved=1;p.col=p.col.map(c=>c*.5)}return p});byW.clear();for(const p of real)byW.set(p.w,p);fill(realPts,real.slice(0,4096),3,.0012);
   $('#nReal').textContent=real.length;$('#nZone').textContent=real.filter(p=>p.zone).length;$('#smsg').textContent=real.length?'':'No planets claimed yet. Turn on the preview layer to see a full system.'}catch(e){$('#smsg').textContent='Live planet data is unavailable right now. Wallet search still shows where a planet would form.';$('#nReal').textContent=$('#nZone').textContent='n/a'}}
 $('#demo').addEventListener('change',e=>{if(!demo.length){demo=makeDemo();fill(demoPts,demo,MOB?1.2:1.4,.0007)}demoPts.visible=e.target.checked;$('#demoNote').textContent=e.target.checked?'Preview layer on. '+demo.length.toLocaleString('en-US')+' simulated planets, not real wallets.':'Preview layer. Simulated planets are not real wallets.'});
 /* camera */
@@ -123,15 +123,16 @@ function spec(p,d){const K=Math.round(278/Math.sqrt(p.au)*(1-d.k.water*.08)+(d.k
 let VIEW=0,FLY=0;
 function select(p,noFly){picked=p;SND.chime(p.au,p.au>=HZI&&p.au<=HZO,true);orbitLine(p);applyDetail(p);$('#panel').hidden=false;
  $('#qName').textContent=p.demo?'Simulated planet '+(p.i+1):p.name;spec(p,D);$('#qD').textContent=describe(p,D);
- $('#qS').textContent=p.demo?'Preview layer':'Stage: awaiting launch';$('#qNo').textContent=p.demo?'':p.no?'No. '+String(p.no).padStart(3,'0'):'Not claimed';
+ $('#qS').textContent=p.demo?'Preview layer':!p.no?'Not claimed':p.reserved?'Reserved until launch':'Stage: '+(p.stage||'Barren');$('#qNo').textContent=p.demo?'':p.no?'No. '+String(p.no).padStart(3,'0'):'Not claimed';
  if(noFly){mk.visible=true;setFollow(false)}else enterPlanet()}
 function dayAngles(p){posOf(p,U.t.value,tmp);const s=tmp.clone().negate().normalize();const up=new THREE.Vector3(0,1,0);const sd=new THREE.Vector3().crossVectors(up,s).normalize();const v=s.multiplyScalar(Math.cos(.8)).addScaledVector(sd,Math.sin(.8)).addScaledVector(up,.3).normalize();let th=Math.atan2(v.z,v.x);th+=Math.round((S.th-th)/6.2832)*6.2832;return{th,ph:Math.acos(v.y)}}
 function enterPlanet(){if(!picked)return;VIEW=1;FLY=1;setFollow(true);S.tld=Math.log(PR*(MOB?6.4:5.6));const da=dayAngles(picked);S.tth=da.th;S.tph=da.ph;$('#hint').textContent=MOB?'Drag to turn the planet. Back to system returns.':'Drag to turn around the planet. Press Esc to return.';document.body.classList.add('pv');$('#qView').textContent='Back to system'}
 function exitPlanet(){if(!VIEW)return;$('#hint').textContent=HINT;VIEW=0;FLY=1;setFollow(false);S.tld=HOME.ld;S.tth=HOME.th;S.tph=HOME.ph;document.body.classList.remove('pv');$('#qView').textContent='Planet view';mk.visible=!!picked}
 $('#qView').addEventListener('click',()=>VIEW?exitPlanet():enterPlanet());
 addEventListener('keydown',e=>{if(e.key==='Escape'){if(e.target&&e.target.tagName==='INPUT'){e.target.blur();if(!VIEW)return}if(VIEW)exitPlanet();else if(picked)$('#qClose').click()}});
+$('#qSearch').addEventListener('click',()=>{exitPlanet();setTimeout(()=>{$('#sq').focus();$('#sq').select()},60)});
 $('#qClose').addEventListener('click',()=>{exitPlanet();$('#panel').hidden=true;picked=null;setFollow(false);mk.visible=false;sel.visible=false});
-const byW=new Map();const B58=/^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+let LAUNCHED=false;const byW=new Map();const B58=/^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 function localFind(q){const e=byW.get(q);if(e)return[e];if(q.length<4||!/^[1-9A-HJ-NP-Za-km-z]+$/.test(q))return[];const m=[];for(const p of real){if(p.w.startsWith(q)||p.w.endsWith(q)){m.push(p);if(m.length>5)break}}return m}
 function closeSel(){$('#qClose').click()}
 function showHit(p,how){select(p);setFollow(true);const m=$('#smsg');m.textContent='Found '+p.name+(p.no?', No. '+String(p.no).padStart(3,'0'):'')+(how||'')+'.';history.replaceState(null,'','?w='+p.w)}

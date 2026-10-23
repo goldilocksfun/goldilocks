@@ -61,7 +61,7 @@ const server=http.createServer(async(req,res)=>{
     if(limited(ip,'all',240,60e3))return send(req,res,429,{error:'Too many requests. Slow down a little.'});
     if(p==='/health')return send(req,res,200,{ok:true});
     if(p==='/api/stats'&&req.method==='GET')return send(req,res,200,stats());
-    if(p==='/api/planets'&&req.method==='GET')return send(req,res,200,{planets:Object.values(db.claims).sort((a,b)=>a.no-b.no).map(c=>({wallet:c.wallet,no:c.no,at:c.at}))});
+    if(p==='/api/planets'&&req.method==='GET')return send(req,res,200,{planets:Object.values(db.claims).sort((a,b)=>a.no-b.no).map(c=>{const g=E.S.planets[c.wallet];return g?{wallet:c.wallet,no:c.no,at:c.at,a:+g.a.toFixed(5),d:g.d,zone:g.zone,stage:g.stage}:{wallet:c.wallet,no:c.no,at:c.at}}),launched:E.launched(),launchAt:E.C.LAUNCH_AT||null});
     if(p==='/api/find'&&req.method==='GET'){if(limited(ip,'find',60,60e3))return send(req,res,429,{error:'Too many searches. Wait a moment.'});const q=String(u.searchParams.get('q')||'').trim().slice(0,64);const fin=c=>c&&(c.status||'final')==='final';const out=c=>({wallet:c.wallet,no:c.no});
       if(isWallet(q))return send(req,res,200,{matches:fin(db.claims[q])?[out(db.claims[q])]:[]});
       const h=q.replace(/^@/,'').toLowerCase();if(/^[a-z0-9_]{1,15}$/.test(h)&&db.xhandles&&db.xhandles[h]&&fin(db.claims[db.xhandles[h]]))return send(req,res,200,{matches:[out(db.claims[db.xhandles[h]])],by:'handle'});
