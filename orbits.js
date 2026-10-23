@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {NOISE,planetVS,planetFS} from './planet-shaders.js';
+import * as SND from './sound.js';
 import {hash,rng,planetType as detailFor,FSX,KINDS,HZI,HZO,typeUniforms,applyType} from './planets.js';
 const CFG=Object.assign({API_BASE:''},window.CONFIG||{});const API=String(CFG.API_BASE||'').replace(/\/+$/,'');
 const $=s=>document.querySelector(s);const MOB=innerWidth<820||matchMedia('(hover:none)').matches;const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -110,7 +111,7 @@ cv.addEventListener('wheel',e=>{e.preventDefault();S.tld=Math.min(LMAX,Math.max(
 const tmp=new THREE.Vector3(),scr=new THREE.Vector3();let hoverQ=null,hovered=null,picked=null,lastHover=0;
 function nearest(x,y){let best=null,bd=MOB?26:14;const t=U.t.value;const test=(list)=>{for(const p of list){posOf(p,t,tmp);scr.copy(tmp).project(cam);if(scr.z>1)continue;const sx=(scr.x+1)/2*W,sy=(1-scr.y)/2*H;const d=Math.hypot(sx-x,sy-y);if(d<bd){bd=d;best=p}}};
  test(real);if(demoPts.visible&&(!best||bd>4))test(demo);return best}
-function pick(x,y,click){const p=nearest(x,y);if(click){if(p)select(p);return}if(p!==hovered){hovered=p;if(!picked){if(p)orbitLine(p);else sel.visible=false}cv.style.cursor=p?'pointer':''}const tt=$('#tip');if(p){tt.hidden=false;tt.textContent=(p.demo?'Simulated planet '+(p.i+1):p.name)+'  '+p.au.toFixed(2)+' AU';tt.style.transform=`translate(${Math.min(x+14,W-tt.offsetWidth-8)}px,${y+14}px)`}else tt.hidden=true}
+function pick(x,y,click){const p=nearest(x,y);if(click){if(p)select(p);return}if(p!==hovered){hovered=p;if(p)SND.chime(p.au,p.au>=HZI&&p.au<=HZO,false);if(!picked){if(p)orbitLine(p);else sel.visible=false}cv.style.cursor=p?'pointer':''}const tt=$('#tip');if(p){tt.hidden=false;tt.textContent=(p.demo?'Simulated planet '+(p.i+1):p.name)+'  '+p.au.toFixed(2)+' AU';tt.style.transform=`translate(${Math.min(x+14,W-tt.offsetWidth-8)}px,${y+14}px)`}else tt.hidden=true}
 const fmt=(v,d)=>v.toFixed(d);
 function zoneOf(au){return au<HZI?'Too hot':au>HZO?'Too cold':'Habitable zone'}
 function describe(p,d){const z=p.au<HZI?'inside the hot edge':p.au>HZO?'beyond the cold edge':'inside the habitable zone';const w=d.k.gas?'deep banded clouds':d.water>70?'mostly ocean':d.water>35?'open seas and continents':d.water>10?'scattered lakes':'dry rock';
@@ -120,7 +121,7 @@ function spec(p,d){const K=Math.round(278/Math.sqrt(p.au)*(1-d.k.water*.08)+(d.k
  const rows=[['Wallet',p.demo?'Preview only':p.w.slice(0,4)+'..'+p.w.slice(-4)],['Class',d.cls],['Mass',fmt(d.mass,d.mass<10?2:0)+' Earth'],['Radius',fmt(d.rad,2)+' Earth'],['Orbit',fmt(p.au,2)+' AU'],['Period',days.toLocaleString('en-US')+' days'],['Surface temp',K+' K'],['Atmosphere',d.atm+' %'],['Water',d.water+' %'],['Chemistry',d.chem+' %'],['Zone',zoneOf(p.au)],['Moons',String(d.moons)],['Rings',d.ringN>1?'Double':d.ring?'Yes':'None'],['Rare trait',d.rare.length?d.rare.join(', '):'None']];
  $('#qSpec').innerHTML='';for(const [k,v] of rows){const r=document.createElement('div');const t=document.createElement('dt');t.textContent=k;const e=document.createElement('dd');e.textContent=v;if(k==='Zone'&&v==='Habitable zone')e.className='gold';r.append(t,e);$('#qSpec').appendChild(r)}}
 let VIEW=0,FLY=0;
-function select(p,noFly){picked=p;orbitLine(p);applyDetail(p);$('#panel').hidden=false;
+function select(p,noFly){picked=p;SND.chime(p.au,p.au>=HZI&&p.au<=HZO,true);orbitLine(p);applyDetail(p);$('#panel').hidden=false;
  $('#qName').textContent=p.demo?'Simulated planet '+(p.i+1):p.name;spec(p,D);$('#qD').textContent=describe(p,D);
  $('#qS').textContent=p.demo?'Preview layer':'Stage: awaiting launch';$('#qNo').textContent=p.demo?'':p.no?'No. '+String(p.no).padStart(3,'0'):'Not claimed';
  if(noFly){mk.visible=true;setFollow(false)}else enterPlanet()}
@@ -151,6 +152,13 @@ function placeLabels(sys,d){const show=sys>.3&&d<60&&!(VIEW&&d<.2);lay.style.opa
 const ft=[];let q=1,last=performance.now();
 function fmtScale(d){if(d<.1)return fmt(d*1000,1)+' milli AU';if(d<2000)return fmt(d,d<10?2:0)+' AU';const ly=d/LY;return ly<1?fmt(d,0).replace(/\B(?=(\d{3})+(?!\d))/g,',')+' AU':ly<1000?fmt(ly,1)+' light years':Math.round(ly).toLocaleString('en-US')+' light years'}
 let lastScale='',VO=0;
+let lastSnd=0;const sv=new THREE.Vector3();
+function sound(sys,d){const t=U.t.value;const camS=cam.position.length();sv.set(0,0,0).project(cam);const sunOn=sv.z<1?1:.5;const sun=sys*sunOn*Math.min(1,Math.max(.12,1.4-Math.log10(Math.max(camS,.1))*.45));
+ const src=real.length?real:(demoPts.visible?demo:[]);const n=Math.min(src.length,MOB?250:700),step=src.length>n?src.length/n:1;const c=[];
+ for(let i=0;i<n;i++){const p=src[Math.floor(i*step)];posOf(p,t,tmp);scr.copy(tmp).project(cam);if(scr.z>1||Math.abs(scr.x)>1.2||Math.abs(scr.y)>1.2)continue;const r=Math.hypot(scr.x,scr.y*.8);const w=Math.max(0,1-r)*Math.min(1,.35/Math.max(.05,tmp.distanceTo(cam.position)/Math.max(d,.05)))*sys;if(w>.02)c.push({id:p.w||('s'+p.i),au:p.au,zone:p.au>=HZI&&p.au<=HZO,x:scr.x,w:p===picked?Math.max(w,.9):w})}
+ if(picked&&!c.find(q=>q.id===(picked.w||'s'+picked.i))){c.push({id:picked.w||'s'+picked.i,au:picked.au,zone:picked.au>=HZI&&picked.au<=HZO,x:0,w:VIEW?1:.6})}
+ c.sort((a,b)=>b.w-a.w);SND.update(sun,c.slice(0,MOB?3:6))}
+const sb=$('#snd');function sndLabel(){sb.textContent=SND.isOn()?'Sound on':'Sound off';sb.classList.toggle('on',SND.isOn());sb.setAttribute('aria-pressed',String(SND.isOn()))}sndLabel();sb.addEventListener('click',()=>{SND.setOn(!SND.isOn());sndLabel()});
 function frame(now){requestAnimationFrame(frame);if(document.hidden)return;const dt=Math.min((now-last)/1000,.05);last=now;
  ft.push(dt*1000);if(ft.length>90){const a=ft.reduce((x,y)=>x+y)/ft.length;ft.length=0;if(a>20&&q>.6){q-=.2;renderer.setPixelRatio(DPR*q);W=0;size()}}
  const k=1-Math.exp(-dt*7);S.th+=(S.tth-S.th)*k;S.ph+=(S.tph-S.ph)*k;const kf=FLY?1-Math.exp(-dt*2.6):k*.9;S.ld+=(S.tld-S.ld)*kf;if(FLY&&Math.abs(S.tld-S.ld)<.03&&S.off.lengthSq()<1e-10)FLY=0;
@@ -168,6 +176,7 @@ function frame(now){requestAnimationFrame(frame);if(document.hidden)return;const
  if(picked){posOf(picked,U.t.value,tmp);mk.geometry.attributes.position.setXYZ(0,tmp.x,tmp.y,tmp.z);mk.geometry.attributes.position.needsUpdate=true;const ph=.5+.5*Math.sin(now*.005);mk.material.uniforms.ph.value=ph;mk.material.uniforms.s.value=40+ph*16}
  sunSM.uniforms.t.value=corSM.uniforms.t.value=now/1000;corM.quaternion.copy(cam.quaternion);const camS=cam.position.length();sunM.visible=corM.visible=camS<500;sun.material.uniforms.fo.value=Math.min(1,Math.max(0,(camS-60)/240));
  placeLabels(sys,d);
+ if(now-lastSnd>200){lastSnd=now;sound(sys,d)}
  renderer.render(scene,cam)}
 addEventListener('resize',size,{passive:true});size();$('#hint').textContent=HINT;loadReal().finally(()=>{const w=new URLSearchParams(location.search).get('w');if(w&&/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)){$('#sq').value=w;$('#sf').requestSubmit()}});requestAnimationFrame(frame);
 window.__orbits={S,setPlay,exitPlanet,get demo(){return demo},select,get real(){return real},demoOn:()=>{$('#demo').click()}};
