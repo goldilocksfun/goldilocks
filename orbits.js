@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {NOISE,planetVS,planetFS} from './planet-shaders.js';
-import * as SND from './sound.js?v=2';
+import * as SND from './sound.js?v=3';
 import {hash,rng,planetType as detailFor,FSX,KINDS,HZI,HZO,typeUniforms,applyType} from './planets.js';
 const CFG=Object.assign({API_BASE:''},window.CONFIG||{});const API=String(CFG.API_BASE||'').replace(/\/+$/,'');
 const $=s=>document.querySelector(s);const MOB=innerWidth<820||matchMedia('(hover:none)').matches;const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
