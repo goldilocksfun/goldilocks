@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {NOISE,planetVS,planetFS} from './planet-shaders.js';
-import * as SND from './sound.js';
+import * as SND from './sound.js?v=2';
 import {hash,rng,planetType as detailFor,FSX,KINDS,HZI,HZO,typeUniforms,applyType} from './planets.js';
 const CFG=Object.assign({API_BASE:''},window.CONFIG||{});const API=String(CFG.API_BASE||'').replace(/\/+$/,'');
 const $=s=>document.querySelector(s);const MOB=innerWidth<820||matchMedia('(hover:none)').matches;const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -152,10 +152,11 @@ function placeLabels(sys,d){const show=sys>.3&&d<60&&!(VIEW&&d<.2);lay.style.opa
 const ft=[];let q=1,last=performance.now();
 function fmtScale(d){if(d<.1)return fmt(d*1000,1)+' milli AU';if(d<2000)return fmt(d,d<10?2:0)+' AU';const ly=d/LY;return ly<1?fmt(d,0).replace(/\B(?=(\d{3})+(?!\d))/g,',')+' AU':ly<1000?fmt(ly,1)+' light years':Math.round(ly).toLocaleString('en-US')+' light years'}
 let lastScale='',VO=0;
+const SAMPLE=(()=>{const r=rng(11);return [.42,.62,.78,.98,1.12,1.3,1.6,2.2,3.4,5.2].map((au,i)=>({au,e:r()*.08,inc:(r()-.5)*.08,node:r()*6.283,peri:r()*6.283,M0:r()*6.283,i:900000+i}))})();
 let lastSnd=0;const sv=new THREE.Vector3();
 function sound(sys,d){const t=U.t.value;const camS=cam.position.length();sv.set(0,0,0).project(cam);const sunOn=sv.z<1?1:.5;const sun=sys*sunOn*Math.min(1,Math.max(.12,1.4-Math.log10(Math.max(camS,.1))*.45));
- const src=real.length?real:(demoPts.visible?demo:[]);const n=Math.min(src.length,MOB?250:700),step=src.length>n?src.length/n:1;const c=[];
- for(let i=0;i<n;i++){const p=src[Math.floor(i*step)];posOf(p,t,tmp);scr.copy(tmp).project(cam);if(scr.z>1||Math.abs(scr.x)>1.2||Math.abs(scr.y)>1.2)continue;const r=Math.hypot(scr.x,scr.y*.8);const w=Math.max(0,1-r)*Math.min(1,.35/Math.max(.05,tmp.distanceTo(cam.position)/Math.max(d,.05)))*sys;if(w>.02)c.push({id:p.w||('s'+p.i),au:p.au,zone:p.au>=HZI&&p.au<=HZO,x:scr.x,w:p===picked?Math.max(w,.9):w})}
+ const src=real.length?real:(demoPts.visible?demo:SAMPLE);const n=Math.min(src.length,MOB?250:700),step=src.length>n?src.length/n:1;const c=[];
+ for(let i=0;i<n;i++){const p=src[Math.floor(i*step)];posOf(p,t,tmp);scr.copy(tmp).project(cam);if(scr.z>1||Math.abs(scr.x)>1.2||Math.abs(scr.y)>1.2)continue;const r=Math.hypot(scr.x,scr.y*.8);let w=Math.max(0,1-r)*Math.min(1,.35/Math.max(.05,tmp.distanceTo(cam.position)/Math.max(d,.05)))*sys;if(src===SAMPLE)w=Math.max(w,.25*sys);if(w>.02)c.push({id:p.w||('s'+p.i),au:p.au,zone:p.au>=HZI&&p.au<=HZO,x:scr.x,w:p===picked?Math.max(w,.9):w})}
  if(picked&&!c.find(q=>q.id===(picked.w||'s'+picked.i))){c.push({id:picked.w||'s'+picked.i,au:picked.au,zone:picked.au>=HZI&&picked.au<=HZO,x:0,w:VIEW?1:.6})}
  c.sort((a,b)=>b.w-a.w);SND.update(sun,c.slice(0,MOB?3:6))}
 const sb=$('#snd');function sndLabel(){sb.textContent=SND.isOn()?'Sound on':'Sound off';sb.classList.toggle('on',SND.isOn());sb.setAttribute('aria-pressed',String(SND.isOn()))}sndLabel();sb.addEventListener('click',()=>{SND.setOn(!SND.isOn());sndLabel()});
