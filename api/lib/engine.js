@@ -4,11 +4,13 @@ const G=require('./game');
 function create(db,save,opts={}){
   const C=G.config();const now=opts.now||(()=>Date.now());
   const S=db.game=db.game||{planets:{},snaps:{},tick:-1,burnSigs:{},burnPool:0,carry:{},jackpot:0,epochs:[],lifeWinner:null,lifeAwarded:false,freeBurns:{},supply:null,lastSnap:null};
-  S.win=S.win||{};S.seeds=S.seeds||{};
+  S.win=S.win||{};S.lifeSet=S.lifeSet||{};if(S.season==null)S.season=G.seasonOf(now());S.seeds=S.seeds||{};
   const curSeed=()=>S.seeds[G.dayOf(now())]||null;
-  const ensure=(w,src)=>{let p=S.planets[w];if(!p){p=S.planets[w]=G.newPlanet(w,src,now(),curSeed());}else if(src==='free'&&p.src!=='free')p.src='free';return p;};
+  const ensure=(w,src,at)=>{let p=S.planets[w];if(!p){p=S.planets[w]=G.newPlanet(w,src,now(),curSeed());if(src==='free')p.freeSince=Math.max(at||now(),C.LAUNCH_AT||0);}else if(src==='free'&&p.src!=='free'){p.src='free';p.freeSince=Math.max(at||now(),C.LAUNCH_AT||0);}return p;};
+  const launched=()=>!C.LAUNCH_AT||now()>=C.LAUNCH_AT;
   // Free claimed planets.
-  function syncClaims(){for(const w in db.claims){const st=db.claims[w].status;if(!st||st==='final')ensure(w,'free');}}
+  // Free planets appear only after launch; their 24h wait starts at max(launch, approval).
+  function syncClaims(){if(!launched())return;for(const w in db.claims){const st=db.claims[w].status;if(!st||st==='final')ensure(w,'free',db.claims[w].finalAt||now());}}
   // Holder snapshot: balances map {owner:raw}. Mass uses the MIN balance over the trailing MIN_HOLD_MS (24h) of snapshots,
   // kept as a monotonic queue per wallet. A top-up therefore counts only once it has been held for the full window.
   // since = first snapshot of the current unbroken non-zero streak; a zero balance resets it.
@@ -31,7 +33,7 @@ function create(db,save,opts={}){
       for(const w in S.planets){const p=S.planets[w];const held=S.supply?G.massFrom(minBal(w),S.supply,C):0;
         p.mass=Math.max(p.src==='free'?C.FREE_MASS:0,held);if(p.src!=='free')p.holdSince=S.win[w]?S.win[w].since:null;
         G.tickPlanet(p,S.tick,t,C,ds);
-        if(!S.lifeWinner&&p.stage===C.STAGES[C.STAGES.length-1].name&&p.eligible){S.lifeWinner=w;S.lifeAt=t;}}
+        if(p.stage===C.STAGES[C.STAGES.length-1].name&&p.eligible){if(!S.lifeWinner){S.lifeWinner=w;S.lifeAt=t;}S.lifeSet[w]=Math.max(S.lifeSet[w]||0,p.mass);}}
     }if(n)save();return n;}
   function recordBal(bal){S.lastBal=bal;}
   function canFreeBurn(w){const day=Math.floor((now()+8*3600e3)/86400e3);return (S.freeBurns[w]||-1)!==day&&C.FREE_BURNS_PER_DAY>0;}
@@ -42,10 +44,15 @@ function create(db,save,opts={}){
   // Close an epoch: weights accumulated since last close become shares. Idempotent per epoch index.
   function closeEpoch(idx,poolLamports){if(S.epochs.some(e=>e.idx===idx))return{already:true,epoch:S.epochs.find(e=>e.idx===idx)};
     const weights={};for(const w in S.planets){const p=S.planets[w];const d=p.weight-(p.paidWeight||0);if(d>0)weights[w]=d;}
-    const winner=S.lifeWinner&&!S.lifeAwarded?S.lifeWinner:null;
-    const r=G.computeEpoch({weights,poolLamports,burnLamports:S.burnPool,carry:S.carry,jackpotBefore:S.jackpot,lifeWinner:winner},C);
-    for(const w in weights)S.planets[w].paidWeight=S.planets[w].weight;S.carry=r.carry;S.jackpot=r.jackpot;S.burnPool=0;if(r.award)S.lifeAwarded=true;
-    const e={idx,closedAt:now(),pool:r.pool,burn:r.burn,hz:r.hz,jackpotIn:r.jp,ops:r.ops,totalWeight:r.totalWeight,jackpotAfter:r.jackpot,award:r.award,weights,shares:r.shares,
+    // Season rollover: the first close in a new quarter pays the Life jackpot to the previous season's Life planets, then evolution resets.
+    const cur=G.seasonOf(now());const roll=cur!==S.season;const lifeMass=roll&&Object.keys(S.lifeSet).length?S.lifeSet:null;
+    const sweep=C.SWEEP_EVERY_EPOCHS>0&&idx%C.SWEEP_EVERY_EPOCHS===0;
+    const r=G.computeEpoch({weights,poolLamports,burnLamports:S.burnPool,carry:S.carry,jackpotBefore:S.jackpot,lifeMass,sweep},C);
+    for(const w in weights)S.planets[w].paidWeight=S.planets[w].weight;S.carry=r.carry;S.jackpot=r.jackpot;S.burnPool=0;
+    if(r.award)r.award.season=S.season;
+    if(roll){S.seasons=(S.seasons||[]).concat([{season:S.season,lifePlanets:Object.keys(S.lifeSet).length,award:r.award?r.award.lamports:0}]).slice(-20);
+      S.season=cur;S.lifeSet={};S.lifeWinner=null;S.lifeAwarded=false;for(const w in S.planets){const p=S.planets[w];p.lifeTicks=0;p.stage=C.STAGES[0].name;}}
+    const e={idx,closedAt:now(),pool:r.pool,burn:r.burn,hz:r.hz,jackpotIn:r.jp,ops:r.ops,totalWeight:r.totalWeight,jackpotAfter:r.jackpot,award:r.award,sweep,season:S.season,weights,shares:r.shares,
       payouts:Object.entries(r.pay).map(([wallet,lamports])=>({wallet,lamports,status:'pending',sig:null})),carry:r.carry};
     S.epochs.push(e);for(const x of S.epochs.slice(0,-14)){delete x.weights;delete x.shares;} // keep state bounded; payouts stay as the ledger
     save();return{epoch:e};}
@@ -77,5 +84,6 @@ function create(db,save,opts={}){
     const p=S.planets[w];const pendingWeight=p?p.weight-(p.paidWeight||0):0;const tw=Object.values(S.planets).reduce((a,q)=>a+(q.weight-(q.paidWeight||0)),0);
     return{wallet:w,paidLamports:total,carryLamports:S.carry[w]||0,pendingWeight:+pendingWeight.toFixed(4),pendingShare:tw?+(pendingWeight/tw).toFixed(6):0,history:rows.reverse()};}
   function leaderboard(){return Object.values(S.planets).map(pub).sort((a,b)=>b.weight-a.weight||b.mass-a.mass).slice(0,100);}
-  return{C,S,setDaySeed,minBal,snapshot,recordBal,advance,applyBurn,canFreeBurn,closeEpoch,execute,pub,earnings,leaderboard,ensure};}
+  function forceSeasonEnd(){S.season=-1;save();}
+  return{C,S,forceSeasonEnd,launched,setDaySeed,minBal,snapshot,recordBal,advance,applyBurn,canFreeBurn,closeEpoch,execute,pub,earnings,leaderboard,ensure};}
 module.exports={create};

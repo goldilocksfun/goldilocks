@@ -6,7 +6,7 @@ const snap=b=>{E.snapshot({[W]:b},sup);};const step=(h,b)=>{for(let i=0;i<h*6;i+
 snap(bps(0.03));step(24,bps(0.03)); // park tiny bag for 24h
 T+=600e3;snap(bps(50));E.advance();assert.ok((E.S.planets[W]||{mass:0}).mass<1);console.log('ok top-up after 24h park scores no instant mass');
 step(23,bps(50));E.advance();assert.ok((E.S.planets[W]||{mass:0}).mass<1);console.log('ok top-up still excluded at 23h');
-step(1.2,bps(50));E.advance();assert.equal(E.S.planets[W].mass,50);console.log('ok top-up counts after full 24h');
+step(1.2,bps(50));E.advance();assert.equal(E.S.planets[W].mass,25);console.log('ok top-up counts after full 24h');
 step(1,bps(10));E.advance();assert.equal(E.S.planets[W].mass,10);console.log('ok a dip lowers mass at once');
 const since=E.S.planets[W].holdSince;T+=600e3;snap('0');step(0.2,bps(50));E.advance();assert.ok(E.S.planets[W].holdSince>since&&!E.S.planets[W].eligible);console.log('ok zero balance resets hold clock');
 // drift grinding: with daily seeds, the same wallet set no longer has a fixed path

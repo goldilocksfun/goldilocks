@@ -12,14 +12,16 @@ function config(){return{
   ECC_MIN:num('ECC_MIN',.01),ECC_MAX:num('ECC_MAX',.06),ECC_PERIOD_TICKS:num('ECC_PERIOD_TICKS',72),
   THRUST_STEP:num('THRUST_STEP',.02),THRUST_LAMPORTS:num('THRUST_LAMPORTS',1e7),FREE_BURNS_PER_DAY:num('FREE_BURNS_PER_DAY',1),
   MASS_UNIT_BPS:num('MASS_UNIT_BPS',1),          // 0.01% of supply = 1 mass
-  MASS_CAP_BPS:num('MASS_CAP_BPS',50),           // 0.5% of supply cap = 50 mass
+  MASS_CAP_BPS:num('MASS_CAP_BPS',25),           // 0.25% of supply cap = 25 mass
   MASS_CURVE:process.env.MASS_CURVE||'linear',   // linear | log
   FREE_MASS:num('FREE_MASS',1),
   MIN_HOLD_MS:num('MIN_HOLD_MS',24*3600e3),
   STAGES:(process.env.STAGES||'Barren:0,Prebiotic:12,Microbial:48,Multicellular:120,Complex:240,Life:400').split(',').map(x=>{const [n,h]=x.split(':');return{name:n,hours:+h}}),
   SPLIT_HZ:num('SPLIT_HZ',.7),SPLIT_JACKPOT:num('SPLIT_JACKPOT',.2),SPLIT_OPS:num('SPLIT_OPS',.1),
   PAYOUT_BATCH:num('PAYOUT_BATCH',10),          // transfers per payout transaction
-  MIN_PAYOUT_LAMPORTS:num('MIN_PAYOUT_LAMPORTS',2e6),
+  MIN_PAYOUT_LAMPORTS:num('MIN_PAYOUT_LAMPORTS',1e6),
+  SWEEP_EVERY_EPOCHS:num('SWEEP_EVERY_EPOCHS',7), // weekly: carryovers below the minimum are paid out regardless
+  LAUNCH_AT:num('LAUNCH_AT',0),                   // token launch time (ms). Free planets exist and start their 24h wait only from here
   EPOCH_MS:num('EPOCH_MS',24*3600e3),
   EPOCH_ANCHOR_MS:num('EPOCH_ANCHOR_MS',Date.UTC(2026,0,1,12,0,0)), // 20:00 Asia/Taipei
 };}
@@ -43,23 +45,28 @@ function massFrom(bal,supply,C){if(!supply||!bal)return 0;const bps=Number(BigIn
 function newPlanet(w,src,now,seed){return{wallet:w,src,seed:seed||null,a:initialAu(w,seed),created:now,massAt:0,mass:0,holdSince:null,zoneTicks:0,lifeTicks:0,weight:0,stage:'Barren',burns:[],lastTick:-1,zone:null,d:null};}
 // One accounting tick for one planet. Returns weight earned this tick.
 function tickPlanet(p,tick,now,C,daySeed){p.a=p.a*(1+driftAt(p.wallet,tick,C,daySeed,p.seed));p.a=Math.max(.3,Math.min(3,p.a));const d=distance(p,tick,C);p.d=+d.toFixed(5);p.zone=zoneOf(d,C);p.lastTick=tick;
-  const eligible=p.mass>0&&(p.src==='free'||(p.holdSince!=null&&now-p.holdSince>=C.MIN_HOLD_MS));p.eligible=eligible;let w=0;
+  const since=p.src==='free'?Math.max(p.freeSince||p.created||0,C.LAUNCH_AT||0):p.holdSince;
+  const eligible=p.mass>0&&since!=null&&now-since>=C.MIN_HOLD_MS;p.eligible=eligible;let w=0;
   if(p.zone==='habitable'&&p.mass>0){p.zoneTicks++;p.lifeTicks++;if(eligible){w=p.mass;p.weight+=w;}}
   else if(p.lifeTicks>0)p.lifeTicks=Math.max(0,p.lifeTicks-2); // leaving the zone erodes evolution progress
   const hrs=p.lifeTicks*th(C);p.stage=stageOf(hrs,C);return w;}
 function burn(p,dir,C){p.a=p.a*(1+(dir==='in'?-1:1)*C.THRUST_STEP);return p.a;}
 // Epoch payout math. weights: {wallet:weight}. pool in lamports (integer). carry: {wallet:lamports owed below minimum}.
-function computeEpoch({weights,poolLamports,burnLamports=0,carry={},jackpotBefore=0,lifeWinner=null},C){const pool=Math.floor(poolLamports);
+function computeEpoch({weights,poolLamports,burnLamports=0,carry={},jackpotBefore=0,lifeMass=null,sweep=false},C){const pool=Math.floor(poolLamports);
   const hz=Math.floor(pool*C.SPLIT_HZ)+Math.floor(burnLamports),jp=Math.floor(pool*C.SPLIT_JACKPOT),ops=pool-Math.floor(pool*C.SPLIT_HZ)-jp;
   const tot=Object.values(weights).reduce((a,b)=>a+b,0);const shares={};let dist=0;
   const ws=Object.keys(weights).filter(w=>weights[w]>0).sort();
   for(const w of ws){const s=Math.floor(hz*weights[w]/tot);shares[w]=s;dist+=s;}
   const dust=hz-dist; // rounding remainder rolls into jackpot
   const newCarry={},pay={};const all=new Set([...Object.keys(shares),...Object.keys(carry)]);
-  for(const w of [...all].sort()){const owed=(shares[w]||0)+(carry[w]||0);if(owed>=C.MIN_PAYOUT_LAMPORTS)pay[w]=owed;else if(owed>0)newCarry[w]=owed;}
+  for(const w of [...all].sort()){const owed=(shares[w]||0)+(carry[w]||0);if(owed>=C.MIN_PAYOUT_LAMPORTS||(sweep&&owed>0))pay[w]=owed;else if(owed>0)newCarry[w]=owed;}
   let jackpot=jackpotBefore+jp+dust;if(tot===0)for(const w in shares)delete shares[w];let award=null;
-  if(lifeWinner&&jackpot>0){award={wallet:lifeWinner,lamports:jackpot};pay[lifeWinner]=(pay[lifeWinner]||0)+jackpot;jackpot=0;}
+  // Season Life jackpot: split by mass among every planet that reached Life in the season. Remainder rolls into the next season.
+  if(lifeMass&&jackpot>0){const lw=Object.keys(lifeMass).filter(w=>lifeMass[w]>0).sort();const lt=lw.reduce((a,w)=>a+lifeMass[w],0);
+    if(lt>0){const split={};let given=0;for(const w of lw){const a=Math.floor(jackpot*lifeMass[w]/lt);if(a>0){split[w]=a;pay[w]=(pay[w]||0)+a;given+=a;}}
+      award={lamports:given,wallets:lw.length,split};jackpot-=given;}}
   return{pool,burn:Math.floor(burnLamports),hz,jp,ops,dust,totalWeight:tot,shares,pay,carry:newCarry,jackpot,award};}
+const seasonOf=t=>{const d=new Date(t+8*3600e3);return d.getUTCFullYear()*4+Math.floor(d.getUTCMonth()/3);}; // Taipei calendar quarter
 const dayOf=t=>Math.floor((t+8*3600e3)/86400e3); // Taipei calendar day
 const epochIndex=(t,C)=>Math.floor((t-C.EPOCH_ANCHOR_MS)/C.EPOCH_MS);
-module.exports={th,hash,rng,config,initialAu,orbitParams,driftAt,distance,zoneOf,stageOf,massFrom,newPlanet,tickPlanet,burn,computeEpoch,epochIndex,dayOf};
+module.exports={th,hash,rng,config,initialAu,orbitParams,driftAt,distance,zoneOf,stageOf,massFrom,newPlanet,tickPlanet,burn,computeEpoch,epochIndex,dayOf,seasonOf};
