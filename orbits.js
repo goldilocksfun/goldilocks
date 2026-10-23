@@ -96,7 +96,7 @@ function makeDemo(){const n=MOB?10000:50000,r=rng(7);const out=[];for(let i=0;i<
 const HINT=MOB?'Tap a planet to inspect it. Pinch to zoom.':'Click a planet to inspect it. Drag to rotate. Scroll to zoom.';
 async function loadReal(){if(!API){$('#smsg').textContent='Claims open soon. Turn on the preview layer to see a full system.';return}
  $('#smsg').textContent='Loading claimed planets.';
- try{const ac=new AbortController();const to=setTimeout(()=>ac.abort(),10000);const r=await fetch(API+'/api/planets',{signal:ac.signal});clearTimeout(to);if(!r.ok)throw new Error('http');const j=await r.json();real=(j.planets||[]).map(x=>Object.assign(paramsFor(x.wallet),{no:x.no}));fill(realPts,real.slice(0,4096),3,.0012);
+ try{const ac=new AbortController();const to=setTimeout(()=>ac.abort(),10000);const r=await fetch(API+'/api/planets',{signal:ac.signal});clearTimeout(to);if(!r.ok)throw new Error('http');const j=await r.json();real=(j.planets||[]).map(x=>Object.assign(paramsFor(x.wallet),{no:x.no}));byW.clear();for(const p of real)byW.set(p.w,p);fill(realPts,real.slice(0,4096),3,.0012);
   $('#nReal').textContent=real.length;$('#nZone').textContent=real.filter(p=>p.zone).length;$('#smsg').textContent=real.length?'':'No planets claimed yet. Turn on the preview layer to see a full system.'}catch(e){$('#smsg').textContent='Live planet data is unavailable right now. Wallet search still shows where a planet would form.';$('#nReal').textContent=$('#nZone').textContent='n/a'}}
 $('#demo').addEventListener('change',e=>{if(!demo.length){demo=makeDemo();fill(demoPts,demo,MOB?1.2:1.4,.0007)}demoPts.visible=e.target.checked;$('#demoNote').textContent=e.target.checked?'Preview layer on. '+demo.length.toLocaleString('en-US')+' simulated planets, not real wallets.':'Preview layer. Simulated planets are not real wallets.'});
 /* camera */
@@ -131,9 +131,21 @@ function exitPlanet(){if(!VIEW)return;$('#hint').textContent=HINT;VIEW=0;FLY=1;s
 $('#qView').addEventListener('click',()=>VIEW?exitPlanet():enterPlanet());
 addEventListener('keydown',e=>{if(e.key==='Escape'){if(e.target&&e.target.tagName==='INPUT'){e.target.blur();if(!VIEW)return}if(VIEW)exitPlanet();else if(picked)$('#qClose').click()}});
 $('#qClose').addEventListener('click',()=>{exitPlanet();$('#panel').hidden=true;picked=null;setFollow(false);mk.visible=false;sel.visible=false});
-$('#sf').addEventListener('submit',e=>{e.preventDefault();const q=$('#sq').value.trim();const m=$('#smsg');if(!q){m.textContent='';return}
- const hit=real.find(p=>p.w===q)||real.find(p=>q.length>=4&&p.w.toLowerCase().startsWith(q.toLowerCase()));
- if(hit){select(hit);m.textContent='Found '+hit.name+'.'}else if(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q)){const p=paramsFor(q);select(p);m.textContent='This wallet has not claimed yet. Showing where its planet would form.'}else m.textContent='No claimed planet matches that address.'});
+const byW=new Map();const B58=/^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+function localFind(q){const e=byW.get(q);if(e)return[e];if(q.length<4||!/^[1-9A-HJ-NP-Za-km-z]+$/.test(q))return[];const m=[];for(const p of real){if(p.w.startsWith(q)||p.w.endsWith(q)){m.push(p);if(m.length>5)break}}return m}
+function closeSel(){$('#qClose').click()}
+function showHit(p,how){select(p);setFollow(true);const m=$('#smsg');m.textContent='Found '+p.name+(p.no?', No. '+String(p.no).padStart(3,'0'):'')+(how||'')+'.';history.replaceState(null,'','?w='+p.w)}
+async function search(q){const m=$('#smsg');const t0=performance.now();if(!q){m.textContent='';if(picked)closeSel();history.replaceState(null,'',location.pathname);return}
+ const isH=/^@/.test(q)||(!B58.test(q)&&/^[A-Za-z0-9_]{1,15}$/.test(q)&&/[_0lIO]/.test(q))||(q.length<4&&/^[A-Za-z0-9_]+$/.test(q));
+ let hits=isH?[]:localFind(q);
+ if(!hits.length&&API){m.textContent='Searching.';try{const ac=new AbortController();const to=setTimeout(()=>ac.abort(),8000);const r=await fetch(API+'/api/find?q='+encodeURIComponent(q),{signal:ac.signal});clearTimeout(to);if(r.ok){const j=await r.json();hits=(j.matches||[]).map(x=>byW.get(x.wallet)||Object.assign(paramsFor(x.wallet),{no:x.no}));if(j.by==='handle'&&hits[0]){window.__lastSearchMs=performance.now()-t0;return showHit(hits[0],' for @'+q.replace(/^@/,'').toLowerCase())}}}catch(e){}}
+ window.__lastSearchMs=performance.now()-t0;
+ if(hits.length===1||(hits.length&&hits[0].w===q))return showHit(hits[0]);
+ if(hits.length>1){showHit(hits[0]);m.textContent=(hits.length>5?'More than 5':hits.length)+' planets match. Showing '+hits[0].w.slice(0,4)+'..'+hits[0].w.slice(-4)+'. Type more characters to narrow it.';return}
+ if(B58.test(q)){const p=paramsFor(q);select(p);setFollow(true);m.textContent='This wallet has not claimed a planet yet. Its final orbit is set by a recent Solana blockhash when it claims, so this position is only an approximate preview.';return}
+ m.textContent=isH?'No claimed planet is linked to that X handle.':'No claimed planet matches that. Use a full wallet address, at least 4 characters of its start or end, or an X handle.'}
+$('#sf').addEventListener('submit',e=>{e.preventDefault();search($('#sq').value.trim())});
+$('#sq').addEventListener('input',e=>{if(!e.target.value.trim()&&picked){closeSel();$('#smsg').textContent='';history.replaceState(null,'',location.pathname)}});
 /* controls */
 let PLAY=!RM,SPD=1;const pb=$('#play');function setPlay(v){PLAY=v;pb.textContent=v?'Pause':'Play';pb.setAttribute('aria-pressed',String(!v))}setPlay(PLAY);
 pb.addEventListener('click',()=>setPlay(!PLAY));
@@ -153,6 +165,7 @@ const ft=[];let q=1,last=performance.now();
 function fmtScale(d){if(d<.1)return fmt(d*1000,1)+' milli AU';if(d<2000)return fmt(d,d<10?2:0)+' AU';const ly=d/LY;return ly<1?fmt(d,0).replace(/\B(?=(\d{3})+(?!\d))/g,',')+' AU':ly<1000?fmt(ly,1)+' light years':Math.round(ly).toLocaleString('en-US')+' light years'}
 let lastScale='',VO=0;
 const SAMPLE=(()=>{const r=rng(11);return [.42,.62,.78,.98,1.12,1.3,1.6,2.2,3.4,5.2].map((au,i)=>({au,e:r()*.08,inc:(r()-.5)*.08,node:r()*6.283,peri:r()*6.283,M0:r()*6.283,i:900000+i}))})();
+const flab=document.createElement('span');flab.className='olab flab mono';flab.style.display='none';$('#labels').appendChild(flab);
 let lastSnd=0;const sv=new THREE.Vector3();
 function sound(sys,d){const t=U.t.value;const camS=cam.position.length();sv.set(0,0,0).project(cam);const sunOn=sv.z<1?1:.5;const sun=sys*sunOn*Math.min(1,Math.max(.12,1.4-Math.log10(Math.max(camS,.1))*.45));
  const src=real.length?real:(demoPts.visible?demo:SAMPLE);const n=Math.min(src.length,MOB?250:700),step=src.length>n?src.length/n:1;const c=[];
@@ -177,10 +190,11 @@ function frame(now){requestAnimationFrame(frame);if(document.hidden)return;const
  if(picked){posOf(picked,U.t.value,tmp);mk.geometry.attributes.position.setXYZ(0,tmp.x,tmp.y,tmp.z);mk.geometry.attributes.position.needsUpdate=true;const ph=.5+.5*Math.sin(now*.005);mk.material.uniforms.ph.value=ph;mk.material.uniforms.s.value=40+ph*16}
  sunSM.uniforms.t.value=corSM.uniforms.t.value=now/1000;corM.quaternion.copy(cam.quaternion);const camS=cam.position.length();sunM.visible=corM.visible=camS<500;sun.material.uniforms.fo.value=Math.min(1,Math.max(0,(camS-60)/240));
  placeLabels(sys,d);
+ if(picked&&!VIEW&&sys>.3){posOf(picked,U.t.value,tmp);scr.copy(tmp).project(cam);const vis=scr.z<1;flab.style.display=vis?'':'none';if(vis){const nm=picked.demo?'Simulated '+(picked.i+1):picked.name;if(flab.textContent!==nm)flab.textContent=nm;flab.style.transform=`translate(${(scr.x+1)/2*W+16}px,${(1-scr.y)/2*H-22}px)`}}else flab.style.display='none';
  if(now-lastSnd>200){lastSnd=now;sound(sys,d)}
  renderer.render(scene,cam)}
-addEventListener('resize',size,{passive:true});size();$('#hint').textContent=HINT;loadReal().finally(()=>{const w=new URLSearchParams(location.search).get('w');if(w&&/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)){$('#sq').value=w;$('#sf').requestSubmit()}});requestAnimationFrame(frame);
-window.__orbits={S,setPlay,exitPlanet,get demo(){return demo},select,get real(){return real},demoOn:()=>{$('#demo').click()}};
+addEventListener('resize',size,{passive:true});size();$('#hint').textContent=HINT;loadReal().finally(()=>{const w=new URLSearchParams(location.search).get('w');if(w&&w.length<=64){$('#sq').value=w;search(w.trim())}});requestAnimationFrame(frame);
+window.__orbits={search,setReal(a){real=a;byW.clear();for(const p of real)byW.set(p.w,p)},paramsFor,S,setPlay,exitPlanet,get demo(){return demo},select,get real(){return real},demoOn:()=>{$('#demo').click()}};
 
 // Pre-warm shader programs one object per idle slot (parallel compile when available) so the first fly-in has no compile hitch and load has no long task.
 {const warm=()=>{const seen=new Set(),q=[];scene.traverse(o=>{if(o.material&&!seen.has(o.material)){seen.add(o.material);q.push(o)}});

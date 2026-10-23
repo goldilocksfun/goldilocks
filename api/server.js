@@ -62,6 +62,10 @@ const server=http.createServer(async(req,res)=>{
     if(p==='/health')return send(req,res,200,{ok:true});
     if(p==='/api/stats'&&req.method==='GET')return send(req,res,200,stats());
     if(p==='/api/planets'&&req.method==='GET')return send(req,res,200,{planets:Object.values(db.claims).sort((a,b)=>a.no-b.no).map(c=>({wallet:c.wallet,no:c.no,at:c.at}))});
+    if(p==='/api/find'&&req.method==='GET'){if(limited(ip,'find',60,60e3))return send(req,res,429,{error:'Too many searches. Wait a moment.'});const q=String(u.searchParams.get('q')||'').trim().slice(0,64);const fin=c=>c&&(c.status||'final')==='final';const out=c=>({wallet:c.wallet,no:c.no});
+      if(isWallet(q))return send(req,res,200,{matches:fin(db.claims[q])?[out(db.claims[q])]:[]});
+      const h=q.replace(/^@/,'').toLowerCase();if(/^[a-z0-9_]{1,15}$/.test(h)&&db.xhandles&&db.xhandles[h]&&fin(db.claims[db.xhandles[h]]))return send(req,res,200,{matches:[out(db.claims[db.xhandles[h]])],by:'handle'});
+      if(q.length<4||!/^[1-9A-HJ-NP-Za-km-z]+$/.test(q))return send(req,res,200,{matches:[]});const m=[];for(const c of Object.values(db.claims)){if(fin(c)&&(c.wallet.startsWith(q)||c.wallet.endsWith(q))){m.push(out(c));if(m.length>=5)break}}return send(req,res,200,{matches:m});}
     if(p==='/api/me'&&req.method==='GET'){const w=u.searchParams.get('wallet');if(!isWallet(w))return send(req,res,400,{error:'Invalid wallet.'});return send(req,res,200,view(w));}
     if(p==='/api/ref'&&req.method==='GET'){const c=String(u.searchParams.get('code')||'').toUpperCase();return send(req,res,db.codes[c]?200:404,{valid:!!db.codes[c]});}
     if(p==='/api/nonce'&&req.method==='POST'){

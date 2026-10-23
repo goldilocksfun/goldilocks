@@ -55,3 +55,5 @@ body.pv .ob-legend span:first-child,body.pv #labels{opacity:0}
 .ob-panel .pc-act button{min-height:38px}
 @media(max-width:820px){.ob-search input{font-size:16px;padding:10px}.ob-ctl button{min-height:40px;min-width:40px;padding:6px 10px}#hint{display:none}}
 @media(max-width:1100px){.ob-legend span:first-child{display:none}.ob .ob-legend #hint{display:inline;margin-left:auto}}
+
+.olab.flab{color:var(--gold);font-size:10.5px;text-shadow:0 0 6px #020308,0 0 2px #020308;border-left:1px solid var(--gold);padding-left:7px}
