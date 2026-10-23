@@ -36,10 +36,10 @@ function create(db,save,opts={}){
         if(p.stage===C.STAGES[C.STAGES.length-1].name&&p.eligible){if(!S.lifeWinner){S.lifeWinner=w;S.lifeAt=t;}S.lifeSet[w]=Math.max(S.lifeSet[w]||0,p.mass);}}
     }if(n)save();return n;}
   function recordBal(bal){S.lastBal=bal;}
-  function canFreeBurn(w){const day=Math.floor((now()+8*3600e3)/86400e3);return (S.freeBurns[w]||-1)!==day&&C.FREE_BURNS_PER_DAY>0;}
+  function canFreeBurn(w){const day=G.dayOf(now());return (S.freeBurns[w]||-1)!==day&&C.FREE_BURNS_PER_DAY>0;}
   function applyBurn(w,dir,{sig,paid}){const p=S.planets[w];if(!p)return{error:'No planet for this wallet.'};
     if(sig){if(S.burnSigs[sig])return Object.assign({already:true},S.burnSigs[sig]);S.burnPool+=paid;}
-    else{if(!canFreeBurn(w))return{error:'Free burn already used today.'};S.freeBurns[w]=Math.floor((now()+8*3600e3)/86400e3);}
+    else{if(!canFreeBurn(w))return{error:'Free burn already used today.'};S.freeBurns[w]=G.dayOf(now());}
     const before=p.a;G.burn(p,dir,C);const r={wallet:w,dir,sig:sig||null,paid:paid||0,before:+before.toFixed(5),after:+p.a.toFixed(5),at:now()};p.burns.push(r);if(p.burns.length>50)p.burns.shift();if(sig)S.burnSigs[sig]=r;save();return r;}
   // Close an epoch: weights accumulated since last close become shares. Idempotent per epoch index.
   function closeEpoch(idx,poolLamports){if(S.epochs.some(e=>e.idx===idx))return{already:true,epoch:S.epochs.find(e=>e.idx===idx)};

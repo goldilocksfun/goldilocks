@@ -109,7 +109,7 @@ const EXCL=new Set(String(process.env.EXCLUDE_WALLETS||'').split(',').map(s=>s.t
 async function doSnapshot(){if(!chain||!GCFG.mint)return null;const [bal,sup]=await Promise.all([chain.holders(GCFG.mint),chain.supply(GCFG.mint)]);for(const x of EXCL)delete bal[x];E.snapshot(bal,sup);return{holders:Object.keys(bal).length,supply:sup};}
 async function doEpoch(idx,pool){const r=E.closeEpoch(idx,pool!=null?pool:GCFG.feePool);if(r.already)return r;
   const mode=GCFG.payoutMode==='devnet'&&GCFG.cluster!=='mainnet-beta'?'devnet':'dry';await E.execute(r.epoch,mode,(w,l,onSig)=>chain.transfer(treasury,w,l,onSig),chain&&chain.sigState,(items,onSig)=>chain.transferMany(treasury,items,onSig),ledgerAppend);return r;}
-// Daily drift seed: a recent blockhash recorded once per Taipei day (published in /api/seeds for audit).
+// Daily drift seed: a recent blockhash recorded once per UTC day (published in /api/seeds for audit).
 async function ensureSeed(){const day=G.dayOf(Date.now());if(E.S.seeds&&E.S.seeds[day]||!chain)return;const {blockhash}=await chain.conn.getLatestBlockhash('finalized');E.setDaySeed(day,blockhash);}
 if(require.main===module){setInterval(async()=>{try{await ensureSeed().catch(e=>console.error('seed',e.message));E.advance();}catch(e){console.error('tick',e.message);}},Math.min(10e3,E.C.TICK_MS/2)).unref();
   if(GCFG.mint){const f=()=>doSnapshot().catch(e=>console.error('snap',e.message));f();setInterval(f,GCFG.snapMs).unref();}

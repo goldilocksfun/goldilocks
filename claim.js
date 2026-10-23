@@ -113,7 +113,7 @@ function refresh(){const c=state.claim,st=c&&c.status,cfg=state.cfg||{req:{}};co
  const need=c&&c.invitesNeeded!=null?c.invitesNeeded:(cfg.req.invites||0);steps.invite.hidden=need<=0&&!reserved;
  setStep('invite',st==='final'?'done':reserved?'active':'');steps.invite.classList.toggle('unlocked',reserved);$('#inv').textContent=c?(c.qualifiedInvites||0):0;$('#invN').textContent=need;
  if(reserved){$('#refIn').value=refLink(c.code);$('#bShare').hidden=false;
-  $('#idesc').textContent=st==='final'?'Your planet is final. Keep sharing your link to climb the board.':'Your planet is reserved'+(c.holdUntil?' until '+new Date(c.holdUntil).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'')+'. Invite '+need+' friend'+(need>1?'s':'')+' who finish steps one to three to make it final.';
+  $('#idesc').textContent=st==='final'?'Your planet is final. Keep sharing your link to climb the board.':'Your planet is reserved'+(c.holdUntil?' until '+new Date(c.holdUntil).toLocaleString('en-US',{timeZone:'UTC',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})+' UTC':'')+'. Invite '+need+' friend'+(need>1?'s':'')+' who finish steps one to three to make it final.';
   $('#pState').textContent=st==='final'?'Claimed / No. '+c.no:'Reserved'}}
 const refLink=c=>location.origin+location.pathname.replace(/[^/]*$/,'')+'claim.html?ref='+encodeURIComponent(c);
 // referral capture

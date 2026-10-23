@@ -15,3 +15,4 @@ const i0=E.closeEpoch(100,0).epoch;assert(!i0.award&&i0.season===E.S.season);
 T=Date.UTC(2026,9,2);const e=E.closeEpoch(101,0).epoch;assert.equal(e.award.split[B],3e8);assert.equal(e.award.split[A],1e8);assert.equal(E.S.jackpot,0);assert.deepEqual(E.S.lifeSet,{});assert.equal(E.S.planets[A].lifeTicks,0);console.log('ok quarter rollover splits jackpot by mass and resets evolution');
 E.S.carry={[A]:4e5};const s=E.closeEpoch(105,0).epoch;assert(s.sweep&&s.payouts.some(p=>p.wallet===A&&p.lamports===4e5));console.log('ok weekly sweep');
 console.log('PASS season tests');
+assert.equal(G.seasonOf(Date.UTC(2026,8,30,23,59)),2026*4+2);assert.equal(G.seasonOf(Date.UTC(2026,9,1,0,0)),2026*4+3);assert.equal(G.dayOf(Date.UTC(2026,9,1,23,0)),G.dayOf(Date.UTC(2026,9,1,0,0)));assert.equal(new Date(C.EPOCH_ANCHOR_MS).getUTCHours(),12);console.log('ok UTC quarters, UTC days, epoch close 12:00 UTC');
