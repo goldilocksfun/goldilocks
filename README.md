@@ -21,7 +21,7 @@ Pre-launch: follow @playgoldilocks on X, connect and sign with a Solana wallet (
 
 ## Season rules
 
-The game engine in `api/` applies these rules. How the daily pool is measured on chain, split and paid, and how to verify every epoch yourself, is documented in [docs/PAYOUTS.md](docs/PAYOUTS.md).
+The game engine in `api/` applies these rules. How the daily pool is measured on chain, split and paid, and how to verify every epoch yourself, is documented in [docs/PAYOUTS.md](docs/PAYOUTS.md); the launch steps are in [docs/LAUNCH.md](docs/LAUNCH.md).
 
 - Free planets: the first 200 wallets to complete the claim get a planet with mass 1. There is no token airdrop.
 - Holder planets: any wallet holding at least 0.01 percent of supply gets a planet, even without a claim.

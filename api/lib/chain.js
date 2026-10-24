@@ -11,7 +11,10 @@ const conn=require('./pollconfirm')(new web3.Connection(RPC,'confirmed'));
 const MEMO=new web3.PublicKey(process.env.MEMO_PROGRAM||'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
 const MEMOS=new Set(['MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr','Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo']);
 const TOKEN_PROGRAMS=['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA','TokenzQdBNbLqP5VEhdkAS6EPFLC1PqHrSHqbKbdB7y'];
-function loadOrCreateKeypair(file){try{return web3.Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(file,'utf8'))));}catch(e){const k=web3.Keypair.generate();fs.writeFileSync(file,JSON.stringify([...k.secretKey]),{mode:0o600});return k;}}
+// Loads a keypair file. A new key is generated only when the file does not exist; an unreadable or malformed
+// file is an error and is never overwritten (it may hold a real treasury key).
+function loadOrCreateKeypair(file){if(fs.existsSync(file))return web3.Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(file,'utf8'))));
+  const k=web3.Keypair.generate();fs.writeFileSync(file,JSON.stringify([...k.secretKey]),{mode:0o600,flag:'wx'});return k;}
 async function supply(mint){const r=await conn.getTokenSupply(new web3.PublicKey(mint));return r.value.amount;}
 // All holders of a mint: {owner: rawAmountString}, summed across token accounts.
 async function holders(mint){const out={};const pk=new web3.PublicKey(mint);

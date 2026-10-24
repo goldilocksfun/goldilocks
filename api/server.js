@@ -185,6 +185,8 @@ async function gameRoute(req,res,u,p,ip){
       burnNonces.delete(nonce);const r=E.applyBurn(wallet,n.dir,{sig:signature,paid:v.paid});return send(req,res,r.error?400:200,r);}
     finally{burnInflight.delete(nonce);burnInflight.delete(signature);}}
   if(p.startsWith('/api/admin/')){if(!isAdmin(req))return send(req,res,403,{error:'Forbidden.'});const b=req.method==='POST'?await body(req):{};
+    // Read-only export of the claim data for migration to a new DATA_FILE (see migrate-claims.js). Game state is not included.
+    if(p==='/api/admin/export'&&req.method==='GET')return send(req,res,200,{exportedAt:Date.now(),cluster:GCFG.cluster,claims:db.claims,codes:db.codes,xhandles:db.xhandles,reviews:db.reviews,xids:db.xids,seq:db.seq,cfg:db.cfg});
     if(p==='/api/admin/snapshot')return send(req,res,200,await doSnapshot()||{skipped:true});
     if(p==='/api/admin/airdrop'){if(GCFG.cluster!=='devnet')return send(req,res,400,{error:'devnet only'});const pub=new chain.web3.Connection(chain.web3.clusterApiUrl('devnet'),'confirmed');
       try{const sig=await pub.requestAirdrop(new chain.web3.PublicKey(b.to||treasury.publicKey.toBase58()),Math.min(+b.lamports||1e9,2e9));return send(req,res,200,{sig});}catch(e){return send(req,res,502,{error:String(e.message).slice(0,200)});}}
