@@ -64,13 +64,14 @@ function create(db,save,opts={}){
   // onLedger(row,epoch) is called once per row when it is confirmed sent (append-only ledger outside the state file).
   async function execute(e,mode,send,state,sendMany,onLedger){if(running.has(e.idx))return e;running.add(e.idx);const B=Math.max(1,C.PAYOUT_BATCH||1);
     const done=p=>{p.status='sent';delete p.error;if(onLedger)try{onLedger(p,e);}catch(x){}};
-    try{if(mode==='dry'){for(const p of e.payouts)if(p.status!=='sent')p.status='dry-run';save();return e;}
+    try{if(mode==='dry'){for(const p of e.payouts)if(p.status!=='sent'&&p.status!=='excluded')p.status='dry-run';save();return e;}
       // 1. resolve rows that already carry a signature
-      const bySig={};for(const p of e.payouts)if(p.sig&&p.status!=='sent')(bySig[p.sig]=bySig[p.sig]||[]).push(p);
+      const fin=p=>p.status==='sent'||p.status==='excluded'||p.status==='dry-run'; // terminal: never sent by a later run
+      const bySig={};for(const p of e.payouts)if(p.sig&&!fin(p))(bySig[p.sig]=bySig[p.sig]||[]).push(p);
       for(const [sig,rows] of Object.entries(bySig)){let st='unknown';try{st=state?await state(sig,rows[0].lvh):'unknown';}catch(x){}
         if(st==='landed')rows.forEach(done);else if(st==='unknown')rows.forEach(p=>p.status='unconfirmed');else rows.forEach(p=>{p.sig=null;p.lvh=null;p.batch=null;});save();}
       // 2. send the rest in batches
-      const todo=e.payouts.filter(p=>p.status!=='sent'&&!p.sig);
+      const todo=e.payouts.filter(p=>!fin(p)&&!p.sig);
       for(let k=0;k<todo.length;k+=B){const grp=todo.slice(k,k+B);
         const mark=(rows,b)=>(sig,lvh)=>{rows.forEach(p=>{p.sig=sig;p.lvh=lvh;p.batch=b;p.status='sending';});save();};
         if(grp.length>1&&sendMany){try{await sendMany(grp.map(p=>({to:p.wallet,lamports:p.lamports})),mark(grp,grp.length));grp.forEach(done);save();continue;}

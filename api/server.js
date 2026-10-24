@@ -102,7 +102,6 @@ const E=require('./lib/engine').create(db,save);const G=require('./lib/game');
 let chain=null;try{chain=require('./lib/chain');}catch(e){console.log('chain disabled:',e.message);}
 const GCFG={mint:process.env.TOKEN_MINT||'',snapMs:+process.env.SNAPSHOT_MS||600e3,payoutMode:process.env.PAYOUT_MODE||'dry',autoEpoch:process.env.AUTO_EPOCH!=='0',
   feePool:+process.env.FEE_POOL_LAMPORTS||0,admin:process.env.ADMIN_KEY||'',cluster:chain?chain.CLUSTER:'none',mainnet:chain?chain.MAINNET_ENABLED:false};
-if(GCFG.payoutMode==='live'&&!GCFG.mainnet)GCFG.payoutMode='dry';
 const treasury=chain?chain.loadOrCreateKeypair(process.env.TREASURY_FILE||path.join(path.dirname(DATA),GCFG.cluster+'-treasury.json')):null;
 const burnNonces=new Map();
 // Append-only payout ledger next to the state file: one JSON line per confirmed payout. Survives state resets; the chain is the final record.
@@ -133,15 +132,14 @@ async function doEpoch(idx,pool){if(E.S.epochs.some(e=>e.idx===idx))return{alrea
   const r=E.closeEpoch(idx,src.lamports);if(r.already)return r;
   r.epoch.feeSource={source:src.source,treasury:src.treasury||null,lamports:src.lamports,txs:src.txs};
   E.S.opsAccrued=(E.S.opsAccrued||0)+r.epoch.ops;save(); // 10% operations share: accounted here, moved only by a person (see docs)
-  const mode=GCFG.payoutMode==='devnet'&&GCFG.cluster!=='mainnet-beta'?'devnet':'dry';
-  if(mode==='devnet'&&!(await solvent(r.epoch))){r.epoch.held='treasury balance below payouts plus reserve';save();return r;}
-  await E.execute(r.epoch,mode,(w,l,onSig)=>chain.transfer(treasury,w,l,onSig),chain&&chain.sigState,(items,onSig)=>chain.transferMany(treasury,items,onSig),ledgerAppend);return r;}
-// Never start a payout run the treasury cannot cover; the epoch is kept and can be retried after funding.
-async function solvent(e){const owed=e.payouts.filter(p=>p.status!=='sent').reduce((a,p)=>a+p.lamports,0);if(!owed)return true;
-  try{return (await chain.balance(treasury.publicKey.toBase58()))>=owed+RESERVE;}catch(x){return false;}}
+  await payEpoch(r.epoch);return r;}
+// One entry point for every payout run (daily close and admin retry). Guards live in lib/payout.js.
+const PAY=require('./lib/payout');
+const payMode=()=>PAY.modeFor({payoutMode:GCFG.payoutMode,cluster:GCFG.cluster,mainnetEnabled:GCFG.mainnet});
+const payEpoch=e=>PAY.run(e,{E,S:E.S,save,mode:payMode(),chain,treasury,exclude:EXCL,ledger:ledgerAppend});
 // Public, verifiable record of one epoch: where the pool came from (signatures) and where it went (signatures).
 function epochRecord(e){return{idx:e.idx,closedAt:e.closedAt,source:e.feeSource||{source:'manual',lamports:e.pool,txs:[]},pool:e.pool,burn:e.burn,
-  split:{zone:e.hz,lifePool:e.jackpotIn,ops:e.ops},totalWeight:e.totalWeight,lifePoolAfter:e.jackpotAfter,lifeAward:e.award,sweep:!!e.sweep,held:e.held||null,
+  split:{zone:e.hz,lifePool:e.jackpotIn,ops:e.ops},totalWeight:e.totalWeight,lifePoolAfter:e.jackpotAfter,lifeAward:e.award,sweep:!!e.sweep,held:e.held||null,mode:e.mode||null,
   payouts:e.payouts.map(x=>({wallet:x.wallet,lamports:x.lamports,status:x.status,sig:x.sig})),carry:e.carry};}
 // Daily drift seed: a recent blockhash recorded once per UTC day (published in /api/seeds for audit).
 async function ensureSeed(){const day=G.dayOf(Date.now());if(E.S.seeds&&E.S.seeds[day]||!chain)return;const {blockhash}=await chain.conn.getLatestBlockhash('finalized');E.setDaySeed(day,blockhash);}
@@ -163,7 +161,7 @@ async function gameRoute(req,res,u,p,ip){
   let m;
   if((m=p.match(/^\/api\/planet\/([^/]+)$/))&&req.method==='GET'){const w=m[1];if(!isWallet(w))return send(req,res,400,{error:'Invalid wallet.'});const pl=E.S.planets[w];if(!pl)return send(req,res,404,{error:'No planet for this wallet yet.',initialAu:+G.initialAu(w).toFixed(5)});return send(req,res,200,E.pub(pl));}
   if((m=p.match(/^\/api\/earnings\/([^/]+)$/))&&req.method==='GET'){if(!isWallet(m[1]))return send(req,res,400,{error:'Invalid wallet.'});return send(req,res,200,E.earnings(m[1]));}
-  if(p==='/api/fees'&&req.method==='GET'){const F=FEES.initState(E.S);return send(req,res,200,{source:FEE_SOURCE,treasury:TREASURY_ADDRESS||null,pendingLamports:F.pending,pendingTxs:F.pendingTxs,cursor:F.cursor,lastScanOk:F.lastScanOk,lastError:F.lastError,opsAccrued:E.S.opsAccrued||0,opsWallet:process.env.OPS_WALLET||null});}
+  if(p==='/api/fees'&&req.method==='GET'){const F=FEES.initState(E.S);return send(req,res,200,{source:FEE_SOURCE,treasury:TREASURY_ADDRESS||null,pendingLamports:F.pending,pendingTxs:F.pendingTxs,cursor:F.cursor,lastScanOk:F.lastScanOk,lastError:F.lastError,opsAccrued:E.S.opsAccrued||0,opsSent:E.S.opsSent||0,opsTransfers:E.S.opsTransfers||[],opsWallet:process.env.OPS_WALLET||null,payoutMode:payMode(),paused:!!E.S.paused||process.env.PAYOUTS_PAUSED==='1'});}
   if((m=p.match(/^\/api\/ledger\/(\d+)$/))&&req.method==='GET'){const e=E.S.epochs.find(x=>x.idx===+m[1]);if(!e)return send(req,res,404,{error:'No such epoch.'});return send(req,res,200,epochRecord(e));}
   if(p==='/api/seeds'&&req.method==='GET')return send(req,res,200,{seeds:E.S.seeds||{}});
   if(p==='/api/leaderboard'&&req.method==='GET')return send(req,res,200,{planets:E.leaderboard()});
@@ -194,7 +192,16 @@ async function gameRoute(req,res,u,p,ip){
     if(p==='/api/admin/tick'){E.advance();return send(req,res,200,{tick:E.S.tick});}
     if(p==='/api/admin/season-end'){E.forceSeasonEnd();return send(req,res,200,{ok:true,lifePlanets:Object.keys(E.S.lifeSet).length,jackpot:E.S.jackpot});}
     if(p==='/api/admin/epoch'){const idx=b.idx!=null?b.idx:(E.S.epochs.length?E.S.epochs[E.S.epochs.length-1].idx+1:0);return send(req,res,200,await doEpoch(idx,b.pool));}
-    if(p==='/api/admin/retry'){const e=E.S.epochs.find(x=>x.idx===b.idx);if(!e)return send(req,res,404,{});if(GCFG.payoutMode==='devnet'&&!(await solvent(e)))return send(req,res,409,{error:'treasury balance below payouts plus reserve'});delete e.held;await E.execute(e,GCFG.payoutMode==='devnet'&&GCFG.cluster!=='mainnet-beta'?'devnet':'dry',(w,l,onSig)=>chain.transfer(treasury,w,l,onSig),chain&&chain.sigState,(items,onSig)=>chain.transferMany(treasury,items,onSig),ledgerAppend);return send(req,res,200,e);}
+    if(p==='/api/admin/retry'){const e=E.S.epochs.find(x=>x.idx===b.idx);if(!e)return send(req,res,404,{});await payEpoch(e);return send(req,res,200,epochRecord(e));}
+    // Kill switch: {paused:true|false}. PAYOUTS_PAUSED=1 in the environment also pauses and cannot be lifted here.
+    if(p==='/api/admin/pause'){E.S.paused=!!b.paused;save();return send(req,res,200,{paused:E.S.paused,envPaused:process.env.PAYOUTS_PAUSED==='1'});}
+    // Operations share: manual only. Sends at most the accounted, not yet transferred amount to OPS_WALLET.
+    if(p==='/api/admin/ops-transfer'){const to=process.env.OPS_WALLET;const due=(E.S.opsAccrued||0)-(E.S.opsSent||0);const lam=Math.floor(+b.lamports||due);
+      if(!to||!isWallet(to))return send(req,res,400,{error:'OPS_WALLET not set'});if((E.S.opsTransfers||[]).some(r=>r.status!=='sent'))return send(req,res,409,{error:'an earlier operations transfer is unconfirmed; check its signature on chain first'});if(!(lam>0)||lam>due)return send(req,res,400,{error:'amount must be between 1 and '+due});
+      if(E.S.paused||process.env.PAYOUTS_PAUSED==='1')return send(req,res,409,{error:'payouts paused (kill switch)'});if(payMode()!=='live')return send(req,res,200,{dryRun:true,to,lamports:lam});
+      const rec={to,lamports:lam,at:Date.now(),sig:null,status:'sending'};(E.S.opsTransfers=E.S.opsTransfers||[]).push(rec);save();
+      try{await chain.transfer(treasury,to,lam,(sig)=>{rec.sig=sig;save();});rec.status='sent';E.S.opsSent=(E.S.opsSent||0)+lam;}catch(x){rec.status='unconfirmed';rec.error=String(x.message).slice(0,160);}
+      save();return send(req,res,200,rec);}
   }
   return false;}
 

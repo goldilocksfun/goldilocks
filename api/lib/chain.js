@@ -27,16 +27,30 @@ async function verifyBurn(sig,{wallet,treasury,lamports,memo}){const tx=await co
     if(ix.programId&&MEMOS.has(ix.programId.toString())){const m=typeof ix.parsed==='string'?ix.parsed:(ix.data?Buffer.from(bs58.decode(ix.data)).toString():'');if(m===memo)memoOk=true;}}
   if(paid<lamports)return{ok:false,error:'Payment to the treasury is missing or too small.'};if(!memoOk)return{ok:false,error:'Memo does not match this burn.'};
   return{ok:true,paid,slot:tx.slot,blockTime:tx.blockTime};}
-// Signs first and reports the signature through onSig before sending, so a crash or timeout never loses track of a payment.
-async function transfer(from,to,lamports,onSig){const {blockhash,lastValidBlockHeight}=await conn.getLatestBlockhash('confirmed');
-  const tx=new web3.Transaction({feePayer:from.publicKey,blockhash,lastValidBlockHeight}).add(web3.SystemProgram.transfer({fromPubkey:from.publicKey,toPubkey:new web3.PublicKey(to),lamports}));tx.sign(from);
-  const sig=bs58.encode(tx.signature);if(onSig)onSig(sig,lastValidBlockHeight);await conn.sendRawTransaction(tx.serialize(),{skipPreflight:false,preflightCommitment:'confirmed'});
-  const r=await conn.confirmTransaction({signature:sig,blockhash,lastValidBlockHeight},'confirmed');if(r.value&&r.value.err)throw new Error('Transaction failed: '+JSON.stringify(r.value.err));return sig;}
-// Several transfers in one transaction (atomic: all land or none). Same sign-first contract as transfer.
-async function transferMany(from,items,onSig){const {blockhash,lastValidBlockHeight}=await conn.getLatestBlockhash('confirmed');
-  const tx=new web3.Transaction({feePayer:from.publicKey,blockhash,lastValidBlockHeight});for(const it of items)tx.add(web3.SystemProgram.transfer({fromPubkey:from.publicKey,toPubkey:new web3.PublicKey(it.to),lamports:it.lamports}));tx.sign(from);
-  if(tx.serialize().length>1232)throw new Error('batch too large');const sig=bs58.encode(tx.signature);if(onSig)onSig(sig,lastValidBlockHeight);await conn.sendRawTransaction(tx.serialize(),{preflightCommitment:'confirmed'});
-  const r=await conn.confirmTransaction({signature:sig,blockhash,lastValidBlockHeight},'confirmed');if(r.value&&r.value.err)throw new Error('Transaction failed: '+JSON.stringify(r.value.err));return sig;}
+// ---------- payouts ----------
+// Priority fee in micro-lamports per compute unit (PRIORITY_MICROLAMPORTS, default 20000). A system transfer uses
+// about 150 compute units, so a 10-transfer batch at the default costs roughly 0.00004 SOL extra.
+const PRIORITY=+(process.env.PRIORITY_MICROLAMPORTS||20000);
+function budget(n){const CB=web3.ComputeBudgetProgram;return[CB.setComputeUnitLimit({units:2000+n*300}),CB.setComputeUnitPrice({microLamports:PRIORITY})];}
+// Signs first and reports the signature through onSig BEFORE anything is sent, so a crash at any later point never
+// loses track of a payment (the caller persists the signature and, on restart, asks sigState before resending).
+// The same signed bytes are rebroadcast every 2 s until confirmed or until the blockhash expires.
+async function signAndSend(from,items,onSig,hook){const {blockhash,lastValidBlockHeight}=await conn.getLatestBlockhash('confirmed');
+  const tx=new web3.Transaction({feePayer:from.publicKey,blockhash,lastValidBlockHeight}).add(...budget(items.length));
+  for(const it of items)tx.add(web3.SystemProgram.transfer({fromPubkey:from.publicKey,toPubkey:new web3.PublicKey(it.to),lamports:it.lamports}));
+  tx.sign(from);const raw=tx.serialize();if(raw.length>1232)throw new Error('batch too large');
+  const sig=bs58.encode(tx.signature);if(onSig)onSig(sig,lastValidBlockHeight);
+  if(hook)hook('signed');
+  await conn.sendRawTransaction(raw,{skipPreflight:false,preflightCommitment:'confirmed',maxRetries:0});
+  if(hook)hook('sent');
+  for(let i=0;i<120;i++){await new Promise(z=>setTimeout(z,i?2000:800));
+    const r=(await conn.getSignatureStatuses([sig])).value[0];
+    if(r){if(r.err)throw new Error('Transaction failed: '+JSON.stringify(r.err));if(r.confirmationStatus==='confirmed'||r.confirmationStatus==='finalized')return sig;continue;}
+    if((await conn.getBlockHeight('confirmed'))>lastValidBlockHeight)throw new Error('Transaction expired: '+sig);
+    try{await conn.sendRawTransaction(raw,{skipPreflight:true,maxRetries:0});}catch(e){}}
+  throw new Error('Confirmation timeout: '+sig);}
+const transfer=(from,to,lamports,onSig,hook)=>signAndSend(from,[{to,lamports}],onSig,hook);
+const transferMany=(from,items,onSig,hook)=>signAndSend(from,items,onSig,hook);
 // State of an earlier payment: 'landed', 'failed', 'expired' (safe to resend) or 'unknown' (wait).
 async function sigState(sig,lvh){const r=(await conn.getSignatureStatuses([sig],{searchTransactionHistory:true})).value[0];if(r)return r.err?'failed':'landed';
   if(lvh&&(await conn.getBlockHeight('confirmed'))>lvh+10)return 'expired';return 'unknown';}

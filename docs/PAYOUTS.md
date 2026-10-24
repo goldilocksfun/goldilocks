@@ -109,4 +109,31 @@ planet that reached Life during the previous quarter, then evolution resets for 
 | `FEE_IGNORE_FROM` | Comma list of sender wallets whose deposits are not income |
 | `TREASURY_RESERVE_LAMPORTS` | Balance kept back for network fees (default 10000000) |
 | `OPS_WALLET` | Published destination for the operations share (moved manually) |
-| `PAYOUT_MODE` | `dry` records payouts without sending; `devnet` sends on devnet |
+| `PAYOUT_MODE` | `dry` records the plan without sending; `live` sends (on mainnet only together with `MAINNET_ENABLED=1`) |
+| `MAINNET_ENABLED` | Must be `1` for any mainnet connection at all |
+| `PRIORITY_MICROLAMPORTS` | Priority fee per compute unit (default 20000) |
+| `MAX_PAYOUT_PER_WALLET_LAMPORTS` | Sanity cap per wallet per epoch (default 5 SOL) |
+| `MAX_PAYOUT_PER_EPOCH_LAMPORTS` | Sanity cap per epoch (default 50 SOL) |
+| `PAYOUTS_PAUSED` | `1` pauses every transfer (kill switch that cannot be lifted from the admin API) |
+| `EXCLUDE_WALLETS` | Treasury, deployer, bonding curve, pool and team wallets: never a planet, never paid |
+
+## 9. How payouts are sent (`api/lib/payout.js`, `api/lib/engine.js`, `api/lib/chain.js`)
+
+1. **The plan is fixed at close.** When an epoch closes, every payout row (wallet, lamports) is stored. Dry and live
+   runs use the same plan. Rows recorded as `dry-run` are final and are never sent by a later live run.
+2. **Guards, before anything is signed:** kill switch, excluded wallets (marked `excluded`), per-wallet cap,
+   per-epoch cap, treasury balance at least the unpaid total plus the reserve. If any guard fails the epoch is
+   marked `held` with the reason and nothing moves.
+3. **Batches.** Up to 10 transfers per transaction (`PAYOUT_BATCH`), with a compute budget and a priority fee.
+   A batch is atomic: all its transfers land or none do.
+4. **Sign, persist, then send.** The signature of each batch is written to the state file before the
+   transaction is broadcast. The same signed bytes are rebroadcast every 2 seconds until confirmed or until the
+   blockhash expires.
+5. **Crash or timeout recovery.** On the next run every row that already has a signature is checked on chain first:
+   `landed` rows become `sent`; a signature that can still land is left alone (`unconfirmed`); only a signature
+   whose blockhash has provably expired (block height past its last valid height) is replaced and resent.
+   So a crash before or after broadcasting can never pay a wallet twice.
+6. **Records.** Every confirmed row keeps its transaction signature, shown in `GET /api/ledger/<epoch>` and
+   appended to the server's payout ledger.
+7. **Operations share.** Only an admin call moves it, only to `OPS_WALLET`, never more than the accounted
+   `opsAccrued - opsSent`, and never while an earlier operations transfer is unconfirmed. Each transfer is listed in `GET /api/fees` (`opsTransfers`).
