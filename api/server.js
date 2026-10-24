@@ -102,6 +102,8 @@ const E=require('./lib/engine').create(db,save);const G=require('./lib/game');
 let chain=null;try{chain=require('./lib/chain');}catch(e){console.log('chain disabled:',e.message);}
 const GCFG={mint:process.env.TOKEN_MINT||'',snapMs:+process.env.SNAPSHOT_MS||600e3,payoutMode:process.env.PAYOUT_MODE||'dry',autoEpoch:process.env.AUTO_EPOCH!=='0',
   feePool:+process.env.FEE_POOL_LAMPORTS||0,admin:process.env.ADMIN_KEY||'',cluster:chain?chain.CLUSTER:'none',mainnet:chain?chain.MAINNET_ENABLED:false};
+// On mainnet the treasury key must already exist (Render secret file); a missing file is a fatal error, never a new key.
+if(chain&&GCFG.cluster==='mainnet-beta'&&!(process.env.TREASURY_FILE&&fs.existsSync(process.env.TREASURY_FILE)))throw new Error('mainnet requires an existing TREASURY_FILE');
 const treasury=chain?chain.loadOrCreateKeypair(process.env.TREASURY_FILE||path.join(path.dirname(DATA),GCFG.cluster+'-treasury.json')):null;
 const burnNonces=new Map();
 // Append-only payout ledger next to the state file: one JSON line per confirmed payout. Survives state resets; the chain is the final record.
