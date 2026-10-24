@@ -21,7 +21,7 @@ Pre-launch: follow @playgoldilocks on X, connect and sign with a Solana wallet (
 
 ## Season rules
 
-The game engine that applies these rules is in progress; the site and claim API are live.
+The game engine in `api/` applies these rules. How the daily pool is measured on chain, split and paid, and how to verify every epoch yourself, is documented in [docs/PAYOUTS.md](docs/PAYOUTS.md).
 
 - Free planets: the first 200 wallets to complete the claim get a planet with mass 1. There is no token airdrop.
 - Holder planets: any wallet holding at least 0.01 percent of supply gets a planet, even without a claim.
@@ -29,6 +29,7 @@ The game engine that applies these rules is in progress; the site and claim API 
 - Holdings count after they have been held for 24 hours.
 - Payouts: planets inside the habitable zone share a daily SOL payout at 12:00 UTC.
 - Interventions: the first thruster burn each day is free, after that each burn costs 0.01 SOL.
+- Creator fees are sent to a public treasury address and measured on chain each epoch.
 - Creator fee split: 70 percent to the habitable zone pool (paid daily in SOL by mass multiplied by time in zone), 20 percent to the Life jackpot, 10 percent to operations.
 
 ## Planets
