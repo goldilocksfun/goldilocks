@@ -96,3 +96,17 @@ html,body,footer,.cl-foot,.flat,#actions{background-color:#020308}
 @media(max-width:1000px){.lr-grid{grid-template-columns:1fr 1fr}.lr-grid div+div{border-left:0;padding-left:0}.lrules{padding:20px 22px 90px}}
 @media(max-width:600px){.lr-grid{grid-template-columns:1fr}}
 .wcard{max-height:calc(100vh - 32px);overflow-y:auto}
+
+/* mobile menu */
+#menu{display:none;background:none;border:0;padding:12px 0 12px 4px;color:var(--ink);font-family:JB;font-size:11px;letter-spacing:.14em;text-transform:uppercase;cursor:pointer}
+.mnav{position:fixed;inset:0;z-index:19;background:rgba(5,5,5,.97);overflow:auto}
+.mnav[hidden]{display:none}
+.mnav-in{display:flex;flex-direction:column;padding:118px 22px 48px}
+.mnav-in .kicker{margin-bottom:18px}
+.mnav-in a{font-family:IS,serif;font-size:30px;line-height:1.1;color:var(--ink);padding:16px 0;border-bottom:1px solid var(--line)}
+.mnav-in a.mnav-lead{font-size:44px;padding:4px 0 26px}
+.mnav-in a.mnav-lead small{display:block;font-family:JB;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);margin-bottom:12px}
+body.menu-open{overflow:hidden}body.menu-open .nav{background:rgba(5,5,5,.97)}
+@media(max-width:1000px){#menu{display:block}}
+.nav nav .pill{white-space:nowrap}#menu{min-width:48px;text-align:right}
+@media(max-width:420px){.nav nav{gap:14px}.nav nav .pill{padding:11px 12px;letter-spacing:.08em}.logo{white-space:nowrap}}
