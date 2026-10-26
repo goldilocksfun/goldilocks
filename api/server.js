@@ -100,39 +100,36 @@ if(require.main===module)server.listen(PORT,()=>console.log('goldilocks-api on :
 // ---------- game ----------
 const E=require('./lib/engine').create(db,save);const G=require('./lib/game');
 let chain=null;try{chain=require('./lib/chain');}catch(e){console.log('chain disabled:',e.message);}
-const GCFG={mint:process.env.TOKEN_MINT||'',snapMs:+process.env.SNAPSHOT_MS||600e3,payoutMode:process.env.PAYOUT_MODE||'dry',autoEpoch:process.env.AUTO_EPOCH!=='0',
-  feePool:+process.env.FEE_POOL_LAMPORTS||0,admin:process.env.ADMIN_KEY||'',cluster:chain?chain.CLUSTER:'none',mainnet:chain?chain.MAINNET_ENABLED:false};
+// TOKEN_MINT: $GOLDILOCKS (holdings give planet mass). LAUNCH_MINT: $LAUNCH (every reward is paid in it).
+const GCFG={mint:process.env.TOKEN_MINT||'',launchMint:process.env.LAUNCH_MINT||'',snapMs:+process.env.SNAPSHOT_MS||600e3,payoutMode:process.env.PAYOUT_MODE||'dry',autoEpoch:process.env.AUTO_EPOCH!=='0',
+  manualPool:+process.env.MANUAL_POOL_UNITS||0,admin:process.env.ADMIN_KEY||'',cluster:chain?chain.CLUSTER:'none',mainnet:chain?chain.MAINNET_ENABLED:false};
 // On mainnet the treasury key must already exist (Render secret file); a missing file is a fatal error, never a new key.
 if(chain&&GCFG.cluster==='mainnet-beta'&&!(process.env.TREASURY_FILE&&fs.existsSync(process.env.TREASURY_FILE)))throw new Error('mainnet requires an existing TREASURY_FILE');
 const treasury=chain?chain.loadOrCreateKeypair(process.env.TREASURY_FILE||path.join(path.dirname(DATA),GCFG.cluster+'-treasury.json')):null;
 const burnNonces=new Map();
 // Append-only payout ledger next to the state file: one JSON line per confirmed payout. Survives state resets; the chain is the final record.
 const LEDGER=process.env.LEDGER_FILE||path.join(path.dirname(DATA),'ledger.jsonl');
-const ledgerAppend=(p,e)=>fs.appendFileSync(LEDGER,JSON.stringify({epoch:e.idx,closedAt:e.closedAt,wallet:p.wallet,lamports:p.lamports,sig:p.sig,batch:p.batch||1,cluster:GCFG.cluster,at:Date.now()})+'\n');
-// Wallets that never get a planet: treasury, deployer, bonding curve, pool and team vaults.
+const ledgerAppend=(p,e)=>fs.appendFileSync(LEDGER,JSON.stringify({epoch:e.idx,closedAt:e.closedAt,wallet:p.wallet,unit:'LAUNCH',mint:GCFG.launchMint||null,amount:p.amount,sig:p.sig,batch:p.batch||1,cluster:GCFG.cluster,at:Date.now()})+'\n');
+// Wallets that never get a planet or a payout: treasury, operations, the uselaunch master wallet, the LaunchLab
+// bonding-curve vault and later the Raydium pool vault, burn addresses and team wallets. The treasury is always added.
 const EXCL=new Set(String(process.env.EXCLUDE_WALLETS||'').split(',').map(s=>s.trim()).filter(Boolean).concat(treasury?[treasury.publicKey.toBase58()]:[]));
 async function doSnapshot(){if(!chain||!GCFG.mint)return null;const [bal,sup]=await Promise.all([chain.holders(GCFG.mint),chain.supply(GCFG.mint)]);for(const x of EXCL)delete bal[x];E.snapshot(bal,sup);return{holders:Object.keys(bal).length,supply:sup};}
-// ---------- daily pool from on-chain fees (see docs/PAYOUTS.md) ----------
-// FEE_SOURCE=chain (default when a chain is configured): the pool is every SOL deposit into TREASURY_ADDRESS since the
-// last epoch, measured on chain by lib/fees.js. FEE_SOURCE=manual: the pool is FEE_POOL_LAMPORTS. An admin can always
-// close an epoch with an explicit pool; that is recorded on the epoch as source "manual" and leaves chain income pending.
-const FEES=require('./lib/fees');
-const FEE_SOURCE=process.env.FEE_SOURCE||(chain?'chain':'manual');
-const TREASURY_ADDRESS=process.env.TREASURY_ADDRESS||(treasury?treasury.publicKey.toBase58():'');
-const FEE_IGNORE=new Set(String(process.env.FEE_IGNORE_FROM||'').split(',').map(s=>s.trim()).filter(Boolean));
-const RESERVE=+process.env.TREASURY_RESERVE_LAMPORTS||10e6; // kept in the treasury for network fees and rent
-if(treasury&&TREASURY_ADDRESS&&TREASURY_ADDRESS!==treasury.publicKey.toBase58())console.log('note: fees are measured at TREASURY_ADDRESS but payouts are signed by a different treasury key; the payout key must be funded from it');
-async function scanFees(){if(FEE_SOURCE!=='chain'||!chain)return null;
-  try{const r=await FEES.scan(E.S,FEES.rpcFrom(chain.conn,chain.web3),{treasury:TREASURY_ADDRESS,ignoreFrom:FEE_IGNORE});save();return r;}
-  catch(e){FEES.initState(E.S).lastError=String(e.message||e).slice(0,200);save();throw e;}}
+// ---------- daily $LAUNCH pool from the treasury balance (see docs/PAYOUTS.md) ----------
+// POOL_SOURCE=chain (default when a chain is configured): the pool is the treasury's free $LAUNCH balance at close,
+// measured by lib/pool.js. POOL_SOURCE=manual: the pool is MANUAL_POOL_UNITS. An admin can always close an epoch with
+// an explicit pool; that is recorded on the epoch as source "manual".
+const POOL=require('./lib/pool');
+const POOL_SOURCE=process.env.POOL_SOURCE||(chain&&GCFG.launchMint?'chain':'manual');
+const TREASURY_ADDRESS=treasury?treasury.publicKey.toBase58():'';
+async function measurePool(){return POOL.measure(E.S,()=>chain.tokenBalanceAt(TREASURY_ADDRESS),{treasury:TREASURY_ADDRESS,shareBps:E.C.POOL_SHARE_BPS});}
 async function doEpoch(idx,pool){if(E.S.epochs.some(e=>e.idx===idx))return{already:true,epoch:E.S.epochs.find(e=>e.idx===idx)};
   let src;
-  if(pool!=null)src={source:'manual',lamports:Math.floor(+pool),txs:[]};
-  else if(FEE_SOURCE==='chain'&&chain){await scanFees(); // throws on any RPC failure: the epoch stays open and is retried, never closed on stale numbers
-    src=Object.assign({source:'chain',treasury:TREASURY_ADDRESS},FEES.take(E.S));}
-  else src={source:'manual',lamports:GCFG.feePool,txs:[]};
-  const r=E.closeEpoch(idx,src.lamports);if(r.already)return r;
-  r.epoch.feeSource={source:src.source,treasury:src.treasury||null,lamports:src.lamports,txs:src.txs};
+  if(pool!=null)src={source:'manual',unit:'LAUNCH',amount:Math.floor(+pool)};
+  else if(POOL_SOURCE==='chain'&&chain){try{src=await measurePool();E.S.poolError=null;} // throws on any RPC failure: the epoch stays open and is retried, never closed on stale numbers
+    catch(e){E.S.poolError=String(e.message||e).slice(0,200);save();throw e;}}
+  else src={source:'manual',unit:'LAUNCH',amount:GCFG.manualPool};
+  const r=E.closeEpoch(idx,src.amount);if(r.already)return r;
+  r.epoch.poolSource=src;
   E.S.opsAccrued=(E.S.opsAccrued||0)+r.epoch.ops;save(); // 10% operations share: accounted here, moved only by a person (see docs)
   await payEpoch(r.epoch);return r;}
 // One entry point for every payout run (daily close and admin retry). Guards live in lib/payout.js.
@@ -140,9 +137,9 @@ const PAY=require('./lib/payout');
 const payMode=()=>PAY.modeFor({payoutMode:GCFG.payoutMode,cluster:GCFG.cluster,mainnetEnabled:GCFG.mainnet});
 const payEpoch=e=>PAY.run(e,{E,S:E.S,save,mode:payMode(),chain,treasury,exclude:EXCL,ledger:ledgerAppend});
 // Public, verifiable record of one epoch: where the pool came from (signatures) and where it went (signatures).
-function epochRecord(e){return{idx:e.idx,closedAt:e.closedAt,source:e.feeSource||{source:'manual',lamports:e.pool,txs:[]},pool:e.pool,burn:e.burn,
+function epochRecord(e){return{idx:e.idx,closedAt:e.closedAt,unit:'LAUNCH',mint:GCFG.launchMint||null,source:e.poolSource||{source:'manual',amount:e.pool},pool:e.pool,
   split:{zone:e.hz,lifePool:e.jackpotIn,ops:e.ops},totalWeight:e.totalWeight,lifePoolAfter:e.jackpotAfter,lifeAward:e.award,sweep:!!e.sweep,held:e.held||null,mode:e.mode||null,
-  payouts:e.payouts.map(x=>({wallet:x.wallet,lamports:x.lamports,status:x.status,sig:x.sig})),carry:e.carry};}
+  payouts:e.payouts.map(x=>({wallet:x.wallet,amount:x.amount,status:x.status,sig:x.sig})),carry:e.carry};}
 // Daily drift seed: a recent blockhash recorded once per UTC day (published in /api/seeds for audit).
 async function ensureSeed(){const day=G.dayOf(Date.now());if(E.S.seeds&&E.S.seeds[day]||!chain)return;const {blockhash}=await chain.conn.getLatestBlockhash('finalized');E.setDaySeed(day,blockhash);}
 if(require.main===module){setInterval(async()=>{try{await ensureSeed().catch(e=>console.error('seed',e.message));E.advance();}catch(e){console.error('tick',e.message);}},Math.min(10e3,E.C.TICK_MS/2)).unref();
@@ -159,15 +156,18 @@ setInterval(()=>{const now=Date.now();for(const [k,v] of burnNonces)if(now-v.at>
 const burnInflight=new Set();
 const burnMsg=(w,dir,n)=>`goldilocks burn ${dir} ${w} ${n}`;
 async function gameRoute(req,res,u,p,ip){
-  if(p==='/api/game'&&req.method==='GET')return send(req,res,200,{cluster:GCFG.cluster,mainnet:GCFG.mainnet,mint:GCFG.mint||null,treasury:treasury?treasury.publicKey.toBase58():null,payoutMode:GCFG.payoutMode,tick:E.S.tick,tickMs:E.C.TICK_MS,epochMs:E.C.EPOCH_MS,epochAnchor:E.C.EPOCH_ANCHOR_MS,hz:[E.C.HZ_IN,E.C.HZ_OUT],clientRpc:process.env.CLIENT_RPC||(GCFG.cluster==='mainnet-beta'?null:'https://api.devnet.solana.com'),memoProgram:chain?chain.MEMO.toBase58():null,thrustLamports:E.C.THRUST_LAMPORTS,thrustStep:E.C.THRUST_STEP,split:[E.C.SPLIT_HZ,E.C.SPLIT_JACKPOT,E.C.SPLIT_OPS],minPayout:E.C.MIN_PAYOUT_LAMPORTS,massCapBps:E.C.MASS_CAP_BPS,sweepEveryEpochs:E.C.SWEEP_EVERY_EPOCHS,launchAt:E.C.LAUNCH_AT||null,launched:E.launched(),season:E.S.season,seasonLifePlanets:Object.keys(E.S.lifeSet||{}).length,minHoldMs:E.C.MIN_HOLD_MS,stages:E.C.STAGES,jackpot:E.S.jackpot,burnPool:E.S.burnPool,feePool:GCFG.feePool,planets:Object.keys(E.S.planets).length,lifeWinner:E.S.lifeWinner,lastSnapshot:E.S.lastSnap});
+  if(p==='/api/game'&&req.method==='GET')return send(req,res,200,{cluster:GCFG.cluster,mainnet:GCFG.mainnet,mint:GCFG.mint||null,treasury:treasury?treasury.publicKey.toBase58():null,launchMint:GCFG.launchMint||null,rewardUnit:'LAUNCH',rewardDecimals:E.C.LAUNCH_DECIMALS,payoutMode:GCFG.payoutMode,tick:E.S.tick,tickMs:E.C.TICK_MS,epochMs:E.C.EPOCH_MS,epochAnchor:E.C.EPOCH_ANCHOR_MS,hz:[E.C.HZ_IN,E.C.HZ_OUT],clientRpc:process.env.CLIENT_RPC||(GCFG.cluster==='mainnet-beta'?null:'https://api.devnet.solana.com'),memoProgram:chain?chain.MEMO.toBase58():null,thrustLamports:E.C.THRUST_LAMPORTS,thrustStep:E.C.THRUST_STEP,split:[E.C.SPLIT_HZ,E.C.SPLIT_JACKPOT,E.C.SPLIT_OPS],minPayout:E.C.MIN_PAYOUT_UNITS,poolShareBps:E.C.POOL_SHARE_BPS,massCapBps:E.C.MASS_CAP_BPS,sweepEveryEpochs:E.C.SWEEP_EVERY_EPOCHS,launchAt:E.C.LAUNCH_AT||null,launched:E.launched(),season:E.S.season,seasonLifePlanets:Object.keys(E.S.lifeSet||{}).length,minHoldMs:E.C.MIN_HOLD_MS,stages:E.C.STAGES,jackpot:E.S.jackpot,thrusterSol:E.S.thrusterSol||0,planets:Object.keys(E.S.planets).length,lifeWinner:E.S.lifeWinner,lastSnapshot:E.S.lastSnap});
   let m;
   if((m=p.match(/^\/api\/planet\/([^/]+)$/))&&req.method==='GET'){const w=m[1];if(!isWallet(w))return send(req,res,400,{error:'Invalid wallet.'});const pl=E.S.planets[w];if(!pl)return send(req,res,404,{error:'No planet for this wallet yet.',initialAu:+G.initialAu(w).toFixed(5)});return send(req,res,200,E.pub(pl));}
   if((m=p.match(/^\/api\/earnings\/([^/]+)$/))&&req.method==='GET'){if(!isWallet(m[1]))return send(req,res,400,{error:'Invalid wallet.'});return send(req,res,200,E.earnings(m[1]));}
-  if(p==='/api/fees'&&req.method==='GET'){const F=FEES.initState(E.S);return send(req,res,200,{source:FEE_SOURCE,treasury:TREASURY_ADDRESS||null,pendingLamports:F.pending,pendingTxs:F.pendingTxs,cursor:F.cursor,lastScanOk:F.lastScanOk,lastError:F.lastError,opsAccrued:E.S.opsAccrued||0,opsSent:E.S.opsSent||0,opsTransfers:E.S.opsTransfers||[],opsWallet:process.env.OPS_WALLET||null,payoutMode:payMode(),paused:!!E.S.paused||process.env.PAYOUTS_PAUSED==='1'});}
+  // Treasury view for outside verification: addresses, what is already promised, and the operations transfers.
+  if((p==='/api/treasury'||p==='/api/fees')&&req.method==='GET'){const c=POOL.committed(E.S);let live=null;if(u.searchParams.get('live')==='1'&&chain&&GCFG.launchMint&&!limited(ip,'trs',6,60e3)){try{live=await measurePool();}catch(e){live={error:String(e.message).slice(0,120)};}}
+    return send(req,res,200,{source:POOL_SOURCE,unit:'LAUNCH',launchMint:GCFG.launchMint||null,treasury:TREASURY_ADDRESS||null,treasuryTokenAccount:chain&&GCFG.launchMint&&TREASURY_ADDRESS?await chain.launchMint().then(m=>chain.ataOf(TREASURY_ADDRESS,m).toBase58()).catch(()=>null):null,
+      committed:c,poolShareBps:E.C.POOL_SHARE_BPS,lastError:E.S.poolError||null,next:live,opsAccrued:E.S.opsAccrued||0,opsSent:E.S.opsSent||0,opsTransfers:E.S.opsTransfers||[],opsWallet:process.env.OPS_WALLET||null,thrusterSol:E.S.thrusterSol||0,payoutMode:payMode(),paused:!!E.S.paused||process.env.PAYOUTS_PAUSED==='1'});}
   if((m=p.match(/^\/api\/ledger\/(\d+)$/))&&req.method==='GET'){const e=E.S.epochs.find(x=>x.idx===+m[1]);if(!e)return send(req,res,404,{error:'No such epoch.'});return send(req,res,200,epochRecord(e));}
   if(p==='/api/seeds'&&req.method==='GET')return send(req,res,200,{seeds:E.S.seeds||{}});
   if(p==='/api/leaderboard'&&req.method==='GET')return send(req,res,200,{planets:E.leaderboard()});
-  if(p==='/api/epochs'&&req.method==='GET')return send(req,res,200,{jackpot:E.S.jackpot,epochs:E.S.epochs.slice(-Math.max(1,Math.min(30,+u.searchParams.get('limit')||10))).reverse().map(e=>({idx:e.idx,closedAt:e.closedAt,pool:e.pool,burn:e.burn,hz:e.hz,jackpotIn:e.jackpotIn,ops:e.ops,source:e.feeSource||null,held:e.held||null,totalWeight:e.totalWeight,jackpotAfter:e.jackpotAfter,award:e.award,payouts:e.payouts.map(x=>({wallet:x.wallet,lamports:x.lamports,status:x.status,sig:x.sig})),carry:e.carry}))});
+  if(p==='/api/epochs'&&req.method==='GET')return send(req,res,200,{jackpot:E.S.jackpot,unit:'LAUNCH',epochs:E.S.epochs.slice(-Math.max(1,Math.min(30,+u.searchParams.get('limit')||10))).reverse().map(e=>({idx:e.idx,closedAt:e.closedAt,pool:e.pool,hz:e.hz,jackpotIn:e.jackpotIn,ops:e.ops,source:e.poolSource||null,held:e.held||null,totalWeight:e.totalWeight,jackpotAfter:e.jackpotAfter,award:e.award,payouts:e.payouts.map(x=>({wallet:x.wallet,amount:x.amount,status:x.status,sig:x.sig})),carry:e.carry}))});
   if(p==='/api/thruster/nonce'&&req.method==='POST'){if(limited(ip,'tn',30,600e3))return send(req,res,429,{error:'Too many tries.'});const {wallet,dir}=await body(req);if(!isWallet(wallet)||!['in','out'].includes(dir))return send(req,res,400,{error:'Invalid request.'});
     if(!E.S.planets[wallet])return send(req,res,404,{error:'No planet for this wallet yet.'});if(burnNonces.size>20000)return send(req,res,503,{error:'Busy. Try again in a minute.'});const n=crypto.randomBytes(8).toString('hex');burnNonces.set(n,{wallet,dir,at:Date.now()});
     return send(req,res,200,{nonce:n,memo:burnMsg(wallet,dir,n),free:E.canFreeBurn(wallet),lamports:E.C.THRUST_LAMPORTS,memoProgram:chain?chain.MEMO.toBase58():null,treasury:treasury&&treasury.publicKey.toBase58(),cluster:GCFG.cluster});}
@@ -190,20 +190,20 @@ async function gameRoute(req,res,u,p,ip){
     if(p==='/api/admin/snapshot')return send(req,res,200,await doSnapshot()||{skipped:true});
     if(p==='/api/admin/airdrop'){if(GCFG.cluster!=='devnet')return send(req,res,400,{error:'devnet only'});const pub=new chain.web3.Connection(chain.web3.clusterApiUrl('devnet'),'confirmed');
       try{const sig=await pub.requestAirdrop(new chain.web3.PublicKey(b.to||treasury.publicKey.toBase58()),Math.min(+b.lamports||1e9,2e9));return send(req,res,200,{sig});}catch(e){return send(req,res,502,{error:String(e.message).slice(0,200)});}}
-    if(p==='/api/admin/fund'){if(GCFG.cluster==='mainnet-beta')return send(req,res,400,{error:'devnet only'});if(!isWallet(b.to)||!(+b.lamports>0))return send(req,res,400,{error:'bad request'});const sig=await chain.transfer(treasury,b.to,Math.min(Math.floor(+b.lamports),2e9));return send(req,res,200,{sig});}
+    if(p==='/api/admin/fund'){if(GCFG.cluster==='mainnet-beta')return send(req,res,400,{error:'devnet only'});if(!isWallet(b.to)||!(+b.lamports>0))return send(req,res,400,{error:'bad request'});const sig=await chain.transferSol(treasury,b.to,Math.min(Math.floor(+b.lamports),2e9));return send(req,res,200,{sig});}
     if(p==='/api/admin/ledger'){let t='';try{t=fs.readFileSync(LEDGER,'utf8');}catch(x){}const rows=t.split('\n').filter(Boolean).map(l=>JSON.parse(l));return send(req,res,200,{count:rows.length,rows:rows.slice(-500)});}
-    if(p==='/api/admin/scan-fees')return send(req,res,200,await scanFees().catch(e=>({error:e.message}))||{skipped:true});
+    if(p==='/api/admin/pool-preview')return send(req,res,200,POOL_SOURCE==='chain'&&chain?await measurePool().catch(e=>({error:e.message})):{source:'manual',amount:GCFG.manualPool});
     if(p==='/api/admin/tick'){E.advance();return send(req,res,200,{tick:E.S.tick});}
     if(p==='/api/admin/season-end'){E.forceSeasonEnd();return send(req,res,200,{ok:true,lifePlanets:Object.keys(E.S.lifeSet).length,jackpot:E.S.jackpot});}
     if(p==='/api/admin/epoch'){const idx=b.idx!=null?b.idx:(E.S.epochs.length?E.S.epochs[E.S.epochs.length-1].idx+1:0);return send(req,res,200,await doEpoch(idx,b.pool));}
     if(p==='/api/admin/retry'){const e=E.S.epochs.find(x=>x.idx===b.idx);if(!e)return send(req,res,404,{});await payEpoch(e);return send(req,res,200,epochRecord(e));}
     // Kill switch: {paused:true|false}. PAYOUTS_PAUSED=1 in the environment also pauses and cannot be lifted here.
     if(p==='/api/admin/pause'){E.S.paused=!!b.paused;save();return send(req,res,200,{paused:E.S.paused,envPaused:process.env.PAYOUTS_PAUSED==='1'});}
-    // Operations share: manual only. Sends at most the accounted, not yet transferred amount to OPS_WALLET.
-    if(p==='/api/admin/ops-transfer'){const to=process.env.OPS_WALLET;const due=(E.S.opsAccrued||0)-(E.S.opsSent||0);const lam=Math.floor(+b.lamports||due);
+    // Operations share ($LAUNCH): manual only. Sends at most the accounted, not yet transferred amount to OPS_WALLET.
+    if(p==='/api/admin/ops-transfer'){const to=process.env.OPS_WALLET;const due=(E.S.opsAccrued||0)-(E.S.opsSent||0);const lam=Math.floor(+b.amount||due);
       if(!to||!isWallet(to))return send(req,res,400,{error:'OPS_WALLET not set'});if((E.S.opsTransfers||[]).some(r=>r.status!=='sent'))return send(req,res,409,{error:'an earlier operations transfer is unconfirmed; check its signature on chain first'});if(!(lam>0)||lam>due)return send(req,res,400,{error:'amount must be between 1 and '+due});
-      if(E.S.paused||process.env.PAYOUTS_PAUSED==='1')return send(req,res,409,{error:'payouts paused (kill switch)'});if(payMode()!=='live')return send(req,res,200,{dryRun:true,to,lamports:lam});
-      const rec={to,lamports:lam,at:Date.now(),sig:null,status:'sending'};(E.S.opsTransfers=E.S.opsTransfers||[]).push(rec);save();
+      if(E.S.paused||process.env.PAYOUTS_PAUSED==='1')return send(req,res,409,{error:'payouts paused (kill switch)'});if(payMode()!=='live')return send(req,res,200,{dryRun:true,to,unit:'LAUNCH',amount:lam});
+      const rec={to,unit:'LAUNCH',amount:lam,at:Date.now(),sig:null,status:'sending'};(E.S.opsTransfers=E.S.opsTransfers||[]).push(rec);save();
       try{await chain.transfer(treasury,to,lam,(sig)=>{rec.sig=sig;save();});rec.status='sent';E.S.opsSent=(E.S.opsSent||0)+lam;}catch(x){rec.status='unconfirmed';rec.error=String(x.message).slice(0,160);}
       save();return send(req,res,200,rec);}
   }

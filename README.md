@@ -2,7 +2,7 @@
 
 A live planet formation simulation where every wallet is a world.
 
-Each holder is a planet with a real orbit around a real star type. Only planets inside the habitable zone earn. Every planet that reaches full life within a season shares the Life jackpot by mass. Seasons last one calendar quarter, and the jackpot resets each season. Free planets go live at launch and, like holders, earn only after 24 hours. Payouts below 0.001 SOL carry over and are swept weekly. Outcomes come from orbital mechanics, not a lottery.
+Each holder is a planet with a real orbit around a real star type. Only planets inside the habitable zone earn. Every planet that reaches full life within a season shares the Life jackpot by mass. Seasons last one calendar quarter, and the jackpot resets each season. Free planets go live at launch and, like holders, earn only after 24 hours. Rewards are paid in $LAUNCH. Payouts below 1 $LAUNCH carry over and are swept weekly. Outcomes come from orbital mechanics, not a lottery.
 
 Website: https://goldilockszone.fun  
 X: https://x.com/playgoldilocks  
@@ -13,11 +13,22 @@ This repository contains the static site, served by GitHub Pages at the custom d
 - `index.html` scroll-driven story of one system forming, from cold cloud to first life
 - `orbits.html` observatory: every claimed planet on its orbit, a planet close-up view with a spec sheet, and wallet search
 - `claim.html` free planet claim for the first 200 wallets
-- `api/` Node claim API (nonce, signature check, stats, planet list), deployed on Render
+- `play.html` live dashboard: planet status, thruster, earnings in $LAUNCH, leaderboard and payout ledger
+- `api/` Node API (claims, game engine, $LAUNCH payouts), deployed on Render
 
 ## Free planet claim
 
 Pre-launch: follow @playgoldilocks on X, connect and sign with a Solana wallet (message signature only, no transaction, no funds move), and invite friends with a personal link. The first 200 wallets get a free planet with a base mass. `config.js` holds `API_BASE` and `X_HANDLE`.
+
+## Launch
+
+$GOLDILOCKS launches on [uselaunch.fun](https://uselaunch.fun) (X: @_LaunchX), built on Raydium LaunchLab.
+
+- The coin is created by the uselaunch master wallet in a private bundle, so nobody buys in the creation block.
+- Every trade pays a 3 percent fee: 1 percent buys back and burns $GOLDILOCKS, 1 percent buys back and burns $LAUNCH,
+  1 percent goes to the uselaunch treasury. Raydium adds 0.25 percent.
+- The creator receives no trading fees. Goldilocks rewards are therefore not funded by fees: they are paid in $LAUNCH
+  from a public treasury, as described below.
 
 ## Season rules
 
@@ -27,10 +38,12 @@ The game engine in `api/` applies these rules. How the daily pool is measured on
 - Holder planets: any wallet holding at least 0.01 percent of supply gets a planet, even without a claim.
 - Mass scales linearly with holdings, from 1 at 0.01 percent of supply up to 25 at the 0.25 percent cap. Holdings above 0.25 percent add no mass.
 - Holdings count after they have been held for 24 hours.
-- Payouts: planets inside the habitable zone share a daily SOL payout at 12:00 UTC.
-- Interventions: the first thruster burn each day is free, after that each burn costs 0.01 SOL.
-- Creator fees are sent to a public treasury address and measured on chain each epoch.
-- Creator fee split: 70 percent to the habitable zone pool (paid daily in SOL by mass multiplied by time in zone), 20 percent to the Life jackpot, 10 percent to operations.
+- Rewards: every reward is paid in $LAUNCH (SPL token), never in SOL.
+- Pool: at 12:00 UTC each day the pool is the $LAUNCH held by the public treasury that is not already promised to anyone (Life pool, carried-over rewards, unmoved operations share, unpaid rows). Anyone can recompute it from the treasury token account.
+- Split: 70 percent to planets inside the habitable zone (by mass multiplied by time in zone), 20 percent to the Life jackpot (paid once per season), 10 percent to operations.
+- Minimum payout: 1 $LAUNCH. Smaller amounts carry over and are paid at the weekly sweep.
+- Interventions: the first thruster burn each day is free, after that each burn costs 0.01 SOL. Burn SOL stays in the treasury to pay network fees and new token account rent for payouts.
+- All times are UTC. Seasons are calendar quarters.
 
 ## Planets
 

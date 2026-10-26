@@ -3,8 +3,13 @@
 const G=require('./game');
 function create(db,save,opts={}){
   const C=G.config();const now=opts.now||(()=>Date.now());
-  const S=db.game=db.game||{planets:{},snaps:{},tick:-1,burnSigs:{},burnPool:0,carry:{},jackpot:0,epochs:[],lifeWinner:null,lifeAwarded:false,freeBurns:{},supply:null,lastSnap:null};
-  S.win=S.win||{};S.lifeSet=S.lifeSet||{};if(S.season==null)S.season=G.seasonOf(now());S.seeds=S.seeds||{};
+  const S=db.game=db.game||{planets:{},snaps:{},tick:-1,burnSigs:{},thrusterSol:0,carry:{},jackpot:0,epochs:[],lifeWinner:null,lifeAwarded:false,freeBurns:{},supply:null,lastSnap:null};
+  S.win=S.win||{};if(S.burnPool!=null){S.thrusterSol=(S.thrusterSol||0)+S.burnPool;delete S.burnPool;}S.thrusterSol=S.thrusterSol||0;S.lifeSet=S.lifeSet||{};if(S.season==null)S.season=G.seasonOf(now());S.seeds=S.seeds||{};
+  // One-time migration from the earlier SOL payout model: SOL amounts are moved to S.legacySol and never paid as $LAUNCH.
+  if(S.unit!=='LAUNCH'){if(S.epochs.length||S.jackpot||Object.keys(S.carry||{}).length||S.opsAccrued){S.legacySol={jackpot:S.jackpot||0,carry:S.carry||{},opsAccrued:S.opsAccrued||0,opsSent:S.opsSent||0,at:now()};
+      for(const e of S.epochs){e.unit=e.unit||'SOL';for(const p of e.payouts||[])if(p.amount==null){p.legacyLamports=p.lamports;delete p.lamports;p.amount=0;if(!['sent','excluded','dry-run'].includes(p.status))p.status='legacy-unpaid';}}
+      S.jackpot=0;S.carry={};S.opsAccrued=0;S.opsSent=0;}
+    delete S.fees;S.unit='LAUNCH';}
   const curSeed=()=>S.seeds[G.dayOf(now())]||null;
   const ensure=(w,src,at)=>{let p=S.planets[w];if(!p){p=S.planets[w]=G.newPlanet(w,src,now(),curSeed());if(src==='free')p.freeSince=Math.max(at||now(),C.LAUNCH_AT||0);}else if(src==='free'&&p.src!=='free'){p.src='free';p.freeSince=Math.max(at||now(),C.LAUNCH_AT||0);}return p;};
   const launched=()=>!C.LAUNCH_AT||now()>=C.LAUNCH_AT;
@@ -38,26 +43,26 @@ function create(db,save,opts={}){
   function recordBal(bal){S.lastBal=bal;}
   function canFreeBurn(w){const day=G.dayOf(now());return (S.freeBurns[w]||-1)!==day&&C.FREE_BURNS_PER_DAY>0;}
   function applyBurn(w,dir,{sig,paid}){const p=S.planets[w];if(!p)return{error:'No planet for this wallet.'};
-    if(sig){if(S.burnSigs[sig])return Object.assign({already:true},S.burnSigs[sig]);S.burnPool+=paid;}
+    if(sig){if(S.burnSigs[sig])return Object.assign({already:true},S.burnSigs[sig]);S.thrusterSol+=paid;}
     else{if(!canFreeBurn(w))return{error:'Free burn already used today.'};S.freeBurns[w]=G.dayOf(now());}
     const before=p.a;G.burn(p,dir,C);const r={wallet:w,dir,sig:sig||null,paid:paid||0,before:+before.toFixed(5),after:+p.a.toFixed(5),at:now()};p.burns.push(r);if(p.burns.length>50)p.burns.shift();if(sig)S.burnSigs[sig]=r;save();return r;}
   // Close an epoch: weights accumulated since last close become shares. Idempotent per epoch index.
-  function closeEpoch(idx,poolLamports){if(S.epochs.some(e=>e.idx===idx))return{already:true,epoch:S.epochs.find(e=>e.idx===idx)};
+  function closeEpoch(idx,pool){if(S.epochs.some(e=>e.idx===idx))return{already:true,epoch:S.epochs.find(e=>e.idx===idx)};
     const weights={};for(const w in S.planets){const p=S.planets[w];const d=p.weight-(p.paidWeight||0);if(d>0)weights[w]=d;}
     // Season rollover: the first close in a new quarter pays the Life jackpot to the previous season's Life planets, then evolution resets.
     const cur=G.seasonOf(now());const roll=cur!==S.season;const lifeMass=roll&&Object.keys(S.lifeSet).length?S.lifeSet:null;
     const sweep=C.SWEEP_EVERY_EPOCHS>0&&idx%C.SWEEP_EVERY_EPOCHS===0;
-    const r=G.computeEpoch({weights,poolLamports,burnLamports:S.burnPool,carry:S.carry,jackpotBefore:S.jackpot,lifeMass,sweep},C);
-    for(const w in weights)S.planets[w].paidWeight=S.planets[w].weight;S.carry=r.carry;S.jackpot=r.jackpot;S.burnPool=0;
+    const r=G.computeEpoch({weights,pool,carry:S.carry,jackpotBefore:S.jackpot,lifeMass,sweep},C);
+    for(const w in weights)S.planets[w].paidWeight=S.planets[w].weight;S.carry=r.carry;S.jackpot=r.jackpot;
     if(r.award)r.award.season=S.season;
-    if(roll){S.seasons=(S.seasons||[]).concat([{season:S.season,lifePlanets:Object.keys(S.lifeSet).length,award:r.award?r.award.lamports:0}]).slice(-20);
+    if(roll){S.seasons=(S.seasons||[]).concat([{season:S.season,lifePlanets:Object.keys(S.lifeSet).length,award:r.award?r.award.amount:0}]).slice(-20);
       S.season=cur;S.lifeSet={};S.lifeWinner=null;S.lifeAwarded=false;for(const w in S.planets){const p=S.planets[w];p.lifeTicks=0;p.stage=C.STAGES[0].name;}}
-    const e={idx,closedAt:now(),pool:r.pool,burn:r.burn,hz:r.hz,jackpotIn:r.jp,ops:r.ops,totalWeight:r.totalWeight,jackpotAfter:r.jackpot,award:r.award,sweep,season:S.season,weights,shares:r.shares,
-      payouts:Object.entries(r.pay).map(([wallet,lamports])=>({wallet,lamports,status:'pending',sig:null})),carry:r.carry};
+    const e={idx,closedAt:now(),unit:'LAUNCH',pool:r.pool,hz:r.hz,jackpotIn:r.jp,ops:r.ops,totalWeight:r.totalWeight,jackpotAfter:r.jackpot,award:r.award,sweep,season:S.season,weights,shares:r.shares,
+      payouts:Object.entries(r.pay).map(([wallet,amount])=>({wallet,amount,status:'pending',sig:null})),carry:r.carry};
     S.epochs.push(e);for(const x of S.epochs.slice(0,-14)){delete x.weights;delete x.shares;} // keep state bounded; payouts stay as the ledger
     save();return{epoch:e};}
-  // Execute pending payouts. mode dry: mark dry-run. mode devnet: real transfers via send(wallet,lamports). Retries only unsent rows.
-  // Execute pending payouts. mode dry: mark dry-run. mode devnet: real transfers via send(wallet,lamports,onSig).
+  // Execute pending payouts. mode dry: mark dry-run. mode devnet: real transfers via send(wallet,amount). Retries only unsent rows.
+  // Execute pending payouts. mode dry: mark dry-run. mode devnet: real transfers via send(wallet,amount,onSig).
   // The signature is stored before sending. A row with a stored signature is resent only after state(sig) proves the old one can never land.
   const running=new Set();
   // sendMany(items,onSig) sends up to BATCH rows in one atomic transaction; a failed batch falls back to one row per transaction.
@@ -66,7 +71,7 @@ function create(db,save,opts={}){
     const done=p=>{p.status='sent';delete p.error;if(onLedger)try{onLedger(p,e);}catch(x){}};
     try{if(mode==='dry'){for(const p of e.payouts)if(p.status!=='sent'&&p.status!=='excluded')p.status='dry-run';save();return e;}
       // 1. resolve rows that already carry a signature
-      const fin=p=>p.status==='sent'||p.status==='excluded'||p.status==='dry-run'; // terminal: never sent by a later run
+      const fin=p=>p.status==='sent'||p.status==='excluded'||p.status==='dry-run'||p.status==='legacy-unpaid'; // terminal: never sent by a later run
       const bySig={};for(const p of e.payouts)if(p.sig&&!fin(p))(bySig[p.sig]=bySig[p.sig]||[]).push(p);
       for(const [sig,rows] of Object.entries(bySig)){let st='unknown';try{st=state?await state(sig,rows[0].lvh):'unknown';}catch(x){}
         if(st==='landed')rows.forEach(done);else if(st==='unknown')rows.forEach(p=>p.status='unconfirmed');else rows.forEach(p=>{p.sig=null;p.lvh=null;p.batch=null;});save();}
@@ -74,16 +79,16 @@ function create(db,save,opts={}){
       const todo=e.payouts.filter(p=>!fin(p)&&!p.sig);
       for(let k=0;k<todo.length;k+=B){const grp=todo.slice(k,k+B);
         const mark=(rows,b)=>(sig,lvh)=>{rows.forEach(p=>{p.sig=sig;p.lvh=lvh;p.batch=b;p.status='sending';});save();};
-        if(grp.length>1&&sendMany){try{await sendMany(grp.map(p=>({to:p.wallet,lamports:p.lamports})),mark(grp,grp.length));grp.forEach(done);save();continue;}
+        if(grp.length>1&&sendMany){try{await sendMany(grp.map(p=>({to:p.wallet,amount:p.amount})),mark(grp,grp.length));grp.forEach(done);save();continue;}
           catch(x){let st='unknown';if(grp[0].sig){try{st=state?await state(grp[0].sig,grp[0].lvh):'unknown';}catch(y){}}
             if(st==='landed'){grp.forEach(done);save();continue;}if(st==='unknown'&&grp[0].sig&&!/failed|too large|0x1|insufficient/i.test(String(x.message))){grp.forEach(p=>{p.status='unconfirmed';p.error=String(x.message||x).slice(0,160);});save();continue;}
             grp.forEach(p=>{p.sig=null;p.lvh=null;p.batch=null;});}}
-        for(const p of grp){try{await send(p.wallet,p.lamports,mark([p],1));done(p);}catch(x){p.status='failed';p.error=String(x.message||x).slice(0,160);}save();}}}
+        for(const p of grp){try{await send(p.wallet,p.amount,mark([p],1));done(p);}catch(x){p.status='failed';p.error=String(x.message||x).slice(0,160);}save();}}}
     finally{running.delete(e.idx);}return e;}
   const pub=p=>p&&{wallet:p.wallet,src:p.src,au:+p.a.toFixed(5),distance:p.d,zone:p.zone,mass:p.mass,eligible:!!p.eligible,holdSince:p.holdSince,zoneHours:+(p.zoneTicks*G.th(C)).toFixed(2),evolutionHours:+(p.lifeTicks*G.th(C)).toFixed(2),stage:p.stage,weight:+p.weight.toFixed(4),burns:p.burns.slice(-10),freeBurnAvailable:canFreeBurn(p.wallet)};
-  function earnings(w){const rows=[];let total=0;for(const e of S.epochs)for(const p of e.payouts)if(p.wallet===w){rows.push({epoch:e.idx,lamports:p.lamports,status:p.status,sig:p.sig,at:e.closedAt});if(p.status==='sent'||p.status==='dry-run')total+=p.lamports;}
+  function earnings(w){const rows=[];let total=0;for(const e of S.epochs)for(const p of e.payouts)if(p.wallet===w){rows.push({epoch:e.idx,amount:p.amount,status:p.status,sig:p.sig,at:e.closedAt});if(p.status==='sent'||p.status==='dry-run')total+=p.amount;}
     const p=S.planets[w];const pendingWeight=p?p.weight-(p.paidWeight||0):0;const tw=Object.values(S.planets).reduce((a,q)=>a+(q.weight-(q.paidWeight||0)),0);
-    return{wallet:w,paidLamports:total,carryLamports:S.carry[w]||0,pendingWeight:+pendingWeight.toFixed(4),pendingShare:tw?+(pendingWeight/tw).toFixed(6):0,history:rows.reverse()};}
+    return{wallet:w,unit:'LAUNCH',paid:total,carry:S.carry[w]||0,pendingWeight:+pendingWeight.toFixed(4),pendingShare:tw?+(pendingWeight/tw).toFixed(6):0,history:rows.reverse()};}
   function leaderboard(){return Object.values(S.planets).map(pub).sort((a,b)=>b.weight-a.weight||b.mass-a.mass).slice(0,100);}
   function forceSeasonEnd(){S.season=-1;save();}
   return{C,S,forceSeasonEnd,launched,setDaySeed,minBal,snapshot,recordBal,advance,applyBurn,canFreeBurn,closeEpoch,execute,pub,earnings,leaderboard,ensure};}

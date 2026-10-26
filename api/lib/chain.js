@@ -30,17 +30,44 @@ async function verifyBurn(sig,{wallet,treasury,lamports,memo}){const tx=await co
     if(ix.programId&&MEMOS.has(ix.programId.toString())){const m=typeof ix.parsed==='string'?ix.parsed:(ix.data?Buffer.from(bs58.decode(ix.data)).toString():'');if(m===memo)memoOk=true;}}
   if(paid<lamports)return{ok:false,error:'Payment to the treasury is missing or too small.'};if(!memoOk)return{ok:false,error:'Memo does not match this burn.'};
   return{ok:true,paid,slot:tx.slot,blockTime:tx.blockTime};}
-// ---------- payouts ----------
-// Priority fee in micro-lamports per compute unit (PRIORITY_MICROLAMPORTS, default 20000). A system transfer uses
-// about 150 compute units, so a 10-transfer batch at the default costs roughly 0.00004 SOL extra.
+// ---------- payouts in $LAUNCH (SPL token) ----------
+// LAUNCH_MINT is the $LAUNCH mint. Rewards leave the treasury's associated token account for that mint and arrive in
+// the winner's associated token account. Each row is two instructions:
+//   1. Associated Token Account program, CreateIdempotent: creates the winner's account if missing, no-op otherwise
+//      (the treasury pays the rent, about 0.00204 SOL, only the first time).
+//   2. Token program, TransferChecked: amount in raw units, with the mint and its decimals checked on chain.
+// Anyone can verify a payout by opening its signature in an explorer: source = treasury token account, mint = LAUNCH_MINT.
+const LAUNCH_MINT=process.env.LAUNCH_MINT||'';
+const ATA_PROGRAM=new web3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+let mintInfo=null; // {mint, program, decimals}, read once from chain
+async function launchMint(){if(mintInfo)return mintInfo;if(!LAUNCH_MINT)throw new Error('LAUNCH_MINT not set');const mint=new web3.PublicKey(LAUNCH_MINT);
+  const acc=await conn.getParsedAccountInfo(mint,'confirmed');if(!acc.value)throw new Error('LAUNCH_MINT account not found');
+  const program=acc.value.owner;if(!TOKEN_PROGRAMS.includes(program.toBase58()))throw new Error('LAUNCH_MINT is not an SPL token mint');
+  const decimals=acc.value.data.parsed.info.decimals;const want=process.env.LAUNCH_DECIMALS;if(want!=null&&want!==''&&+want!==decimals)throw new Error(`LAUNCH_DECIMALS=${want} but the mint has ${decimals}`);
+  return mintInfo={mint,program,decimals};}
+function ataOf(owner,m){return web3.PublicKey.findProgramAddressSync([new web3.PublicKey(owner).toBuffer(),m.program.toBuffer(),m.mint.toBuffer()],ATA_PROGRAM)[0];}
+// Treasury $LAUNCH balance in raw units (0 when its token account does not exist yet), and the slot it was read at.
+async function tokenBalanceAt(owner){const m=await launchMint();const ata=ataOf(owner,m);
+  const r=await conn.getTokenAccountBalance(ata,'finalized').catch(e=>{if(/could not find account|Invalid param/i.test(String(e.message)))return null;throw e;});
+  const amount=r?Number(r.value.amount):0;if(!Number.isSafeInteger(amount))throw new Error('token balance too large for safe integer math');
+  return{amount,slot:r?r.context.slot:null,tokenAccount:ata.toBase58(),mint:m.mint.toBase58(),decimals:m.decimals};}
+const tokenBalance=async owner=>(await tokenBalanceAt(owner)).amount;
+function u64(n){const b=Buffer.alloc(8);b.writeBigUInt64LE(BigInt(n));return b;}
+function payIxs(from,to,amount,m){const owner=new web3.PublicKey(to);const src=ataOf(from,m),dst=ataOf(owner,m);
+  return[new web3.TransactionInstruction({programId:ATA_PROGRAM,data:Buffer.from([1]),keys:[
+      {pubkey:from,isSigner:true,isWritable:true},{pubkey:dst,isSigner:false,isWritable:true},{pubkey:owner,isSigner:false,isWritable:false},
+      {pubkey:m.mint,isSigner:false,isWritable:false},{pubkey:web3.SystemProgram.programId,isSigner:false,isWritable:false},{pubkey:m.program,isSigner:false,isWritable:false}]}),
+    new web3.TransactionInstruction({programId:m.program,data:Buffer.concat([Buffer.from([12]),u64(amount),Buffer.from([m.decimals])]),keys:[
+      {pubkey:src,isSigner:false,isWritable:true},{pubkey:m.mint,isSigner:false,isWritable:false},{pubkey:dst,isSigner:false,isWritable:true},{pubkey:from,isSigner:true,isWritable:false}]})];}
+// Priority fee in micro-lamports per compute unit (PRIORITY_MICROLAMPORTS, default 20000). A row (create-if-missing plus
+// transfer) is budgeted at 40,000 compute units, so a 5-row batch at the default costs roughly 0.000004 SOL extra.
 const PRIORITY=+(process.env.PRIORITY_MICROLAMPORTS||20000);
-function budget(n){const CB=web3.ComputeBudgetProgram;return[CB.setComputeUnitLimit({units:2000+n*300}),CB.setComputeUnitPrice({microLamports:PRIORITY})];}
+function budget(n,per){const CB=web3.ComputeBudgetProgram;return[CB.setComputeUnitLimit({units:Math.min(1.4e6,5000+n*per)}),CB.setComputeUnitPrice({microLamports:PRIORITY})];}
 // Signs first and reports the signature through onSig BEFORE anything is sent, so a crash at any later point never
 // loses track of a payment (the caller persists the signature and, on restart, asks sigState before resending).
 // The same signed bytes are rebroadcast every 2 s until confirmed or until the blockhash expires.
-async function signAndSend(from,items,onSig,hook){const {blockhash,lastValidBlockHeight}=await conn.getLatestBlockhash('confirmed');
-  const tx=new web3.Transaction({feePayer:from.publicKey,blockhash,lastValidBlockHeight}).add(...budget(items.length));
-  for(const it of items)tx.add(web3.SystemProgram.transfer({fromPubkey:from.publicKey,toPubkey:new web3.PublicKey(it.to),lamports:it.lamports}));
+async function signAndSend(from,ixs,per,n,onSig,hook){const {blockhash,lastValidBlockHeight}=await conn.getLatestBlockhash('confirmed');
+  const tx=new web3.Transaction({feePayer:from.publicKey,blockhash,lastValidBlockHeight}).add(...budget(n,per),...ixs);
   tx.sign(from);const raw=tx.serialize();if(raw.length>1232)throw new Error('batch too large');
   const sig=bs58.encode(tx.signature);if(onSig)onSig(sig,lastValidBlockHeight);
   if(hook)hook('signed');
@@ -52,9 +79,13 @@ async function signAndSend(from,items,onSig,hook){const {blockhash,lastValidBloc
     if((await conn.getBlockHeight('confirmed'))>lastValidBlockHeight)throw new Error('Transaction expired: '+sig);
     try{await conn.sendRawTransaction(raw,{skipPreflight:true,maxRetries:0});}catch(e){}}
   throw new Error('Confirmation timeout: '+sig);}
-const transfer=(from,to,lamports,onSig,hook)=>signAndSend(from,[{to,lamports}],onSig,hook);
-const transferMany=(from,items,onSig,hook)=>signAndSend(from,items,onSig,hook);
+// $LAUNCH payouts: items [{to, amount}] in raw units.
+async function transferMany(from,items,onSig,hook){const m=await launchMint();for(const it of items)if(!(Number.isSafeInteger(it.amount)&&it.amount>0))throw new Error('bad amount');
+  return signAndSend(from,items.flatMap(it=>payIxs(from.publicKey,it.to,it.amount,m)),40000,items.length,onSig,hook);}
+const transfer=(from,to,amount,onSig,hook)=>transferMany(from,[{to,amount}],onSig,hook);
+// Plain SOL transfer, used only by the devnet-only admin fund route.
+const transferSol=(from,to,lamports,onSig,hook)=>signAndSend(from,[web3.SystemProgram.transfer({fromPubkey:from.publicKey,toPubkey:new web3.PublicKey(to),lamports})],300,1,onSig,hook);
 // State of an earlier payment: 'landed', 'failed', 'expired' (safe to resend) or 'unknown' (wait).
 async function sigState(sig,lvh){const r=(await conn.getSignatureStatuses([sig],{searchTransactionHistory:true})).value[0];if(r)return r.err?'failed':'landed';
   if(lvh&&(await conn.getBlockHeight('confirmed'))>lvh+10)return 'expired';return 'unknown';}
-module.exports={web3,conn,CLUSTER,MAINNET_ENABLED,MEMO,loadOrCreateKeypair,supply,holders,verifyBurn,transfer,transferMany,sigState,balance:pk=>conn.getBalance(new web3.PublicKey(pk))};
+module.exports={web3,conn,CLUSTER,MAINNET_ENABLED,MEMO,LAUNCH_MINT,launchMint,ataOf,payIxs,budget,tokenBalance,tokenBalanceAt,loadOrCreateKeypair,supply,holders,verifyBurn,transfer,transferMany,transferSol,sigState,balance:pk=>conn.getBalance(new web3.PublicKey(pk))};

@@ -1,66 +1,77 @@
-# Goldilocks payouts: how the daily pool is funded, split and paid
+# Goldilocks payouts: how the daily $LAUNCH pool is funded, split and paid
 
 This document describes exactly what the backend in `api/` does. Every number below is a default in
-`api/lib/game.js` (`config()`); the live values are published at `GET /api/game`.
+`api/lib/game.js` (`config()`) or `api/lib/payout.js`; the live values are published at `GET /api/game`.
 Anyone can check each step against the Solana chain using only public data.
 
-## 1. Where the money comes from
+## 1. Launch venue and what it means for rewards
 
-All income goes to one public **treasury address** (`TREASURY_ADDRESS`, shown as `treasury` in `GET /api/fees`).
+$GOLDILOCKS launches on [uselaunch.fun](https://uselaunch.fun) (X: @_LaunchX), which runs on Raydium LaunchLab.
 
-- **Creator fees.** The token's creator fees are routed to the treasury address.
-- **Thruster burns.** A paid burn sends 0.01 SOL (`THRUST_LAMPORTS`) to the treasury with a memo
-  `goldilocks burn <in|out> <wallet> <nonce>`. Burn SOL is credited in full to the zone share of the next epoch.
+- The coin is created by the uselaunch master wallet in a private bundle, so nobody can buy in the creation block.
+- Every trade pays a 3 percent fee: 1 percent buys back and burns $GOLDILOCKS, 1 percent buys back and burns $LAUNCH,
+  1 percent goes to the uselaunch treasury. Raydium adds its own 0.25 percent.
+- **The coin's creator receives no trading fees.** Goldilocks therefore has no creator-fee income, and the backend
+  does not try to measure or claim any.
 
-Nothing else is income. There is no hidden source and no manual top-up of the pool in normal operation.
+**All rewards are paid in $LAUNCH** (an SPL token, mint `LAUNCH_MINT`), never in SOL. Thruster burns are still paid in
+SOL (section 2), because a burn is a game action, not a reward.
 
-## 2. How each epoch's pool is measured on chain (`api/lib/fees.js`)
+## 2. Where the $LAUNCH comes from
 
-An epoch closes every day at **12:00 UTC**. Just before closing, the server scans the treasury's transaction
-history (`getSignaturesForAddress`, `finalized` commitment) forward from the last processed signature.
-For each new transaction it reads the treasury's balance change from the transaction metadata:
+Rewards come from one public **treasury address** (`treasury` in `GET /api/game` and `GET /api/treasury`). Its
+$LAUNCH sits in the treasury's associated token account for `LAUNCH_MINT` (`treasuryTokenAccount` in `GET /api/treasury`).
+
+How $LAUNCH reaches the treasury is not decided by the code: the pool is simply whatever free $LAUNCH the treasury
+holds at the close (section 3). Every deposit is a normal token transfer that anyone can see in an explorer.
+The funding source is published separately by the team and must not be assumed from this document.
+
+**Thruster burns.** A paid burn sends 0.01 SOL (`THRUST_LAMPORTS`) to the treasury with a memo
+`goldilocks burn <in|out> <wallet> <nonce>`. This SOL is not part of the $LAUNCH pool. It stays in the treasury and
+pays network fees and the rent for new token accounts when winners are paid for the first time (`thrusterSol` in
+`GET /api/game` is the running total).
+
+## 3. How each epoch's pool is measured (`api/lib/pool.js`)
+
+An epoch closes every day at **12:00 UTC**. At the close the server reads the treasury token account balance at
+`finalized` commitment and subtracts everything that is already promised:
 
 ```
-delta = postBalance(treasury) - preBalance(treasury)
-if the treasury paid the network fee: delta += fee      (our own fee is not an outflow)
+balance    = $LAUNCH in the treasury token account (raw units)
+committed  = Life pool not yet awarded
+           + carried-over rewards below the minimum payout
+           + operations share accounted but not yet moved
+           + payout rows of earlier epochs still owed (pending, sending, unconfirmed or failed)
+free       = max(0, balance - committed)
+pool       = floor(free * POOL_SHARE_BPS / 10000)        default POOL_SHARE_BPS = 10000 (all of it)
 ```
 
-| Transaction                                             | Counted as pool income? |
-|---------------------------------------------------------|-------------------------|
-| Any transfer or program CPI that raises the balance     | yes, `delta`            |
-| Creator-fee claim signed by the treasury itself         | yes, `delta` after fee  |
-| Thruster burn (memo `goldilocks burn ...`)              | no, already in the burn share |
-| Payouts and any other outflow (`delta <= 0`)            | no                      |
-| Failed transaction                                      | no                      |
-| Sent by a wallet listed in `FEE_IGNORE_FROM` (e.g. a team top-up for network fees) | no |
+Rules that follow from this:
 
-Safety rules:
+- **Every unit is released once.** $LAUNCH already assigned to a player, the Life pool or operations is counted in
+  `committed`, so a later epoch can never hand it out again. New deposits become part of the next close.
+- **No stale numbers.** If the balance cannot be read the epoch stays open and is retried every 30 seconds.
+  An epoch is never closed on an old or guessed balance.
+- **Slower release is a setting.** `POOL_SHARE_BPS` below 10000 releases only that share of the free balance each
+  day (for example 1000 = 10 percent per day), so one large deposit is spread over many days.
+- **Manual fallback.** `POOL_SOURCE=manual` uses `MANUAL_POOL_UNITS`. An admin may close an epoch with an explicit
+  pool; such epochs are labeled `source: "manual"` in the public ledger.
 
-- **No double counting.** Every processed signature is stored in the state file, together with a cursor.
-  Restarts and rescans never count a signature twice. The counted amount is handed to exactly one epoch
-  in the same step that closes it.
-- **No stale numbers.** If any RPC call fails, the scan throws, nothing is changed, and the epoch stays open.
-  It is retried every 30 seconds. An epoch is never closed with an old or partial pool.
-- **History before start is ignored.** On first run the cursor is set to the newest signature; only later deposits count.
-- **Solvency check.** A payout run starts only when the treasury holds every unpaid payout plus a reserve
-  (`TREASURY_RESERVE_LAMPORTS`, default 0.01 SOL). Otherwise the epoch is marked `held` and can be retried.
-- **Fallback.** `FEE_SOURCE=manual` uses `FEE_POOL_LAMPORTS` instead. An admin may close an epoch with an
-  explicit pool; such epochs are labeled `source: "manual"` in the public ledger.
+All inputs (`balance`, `slot`, every `committed` part, `free`, `shareBps`, `amount`) are stored on the epoch and
+published at `GET /api/ledger/<epoch>`.
 
-## 3. The 70 / 20 / 10 split
-
-For each epoch `pool` = the on-chain income above.
+## 4. The 70 / 20 / 10 split
 
 | Share | Goes to |
 |-------|---------|
-| 70 percent of `pool` + all burn SOL | **Zone share**: planets that spent time inside the habitable zone this epoch |
-| 20 percent of `pool` | **Life pool**, paid once per season (section 6) |
-| 10 percent of `pool` | **Operations**. Accounted in `opsAccrued` (`GET /api/fees`). It stays in the treasury until moved by a person to `OPS_WALLET`; the server never moves it automatically. |
+| 70 percent of `pool` | **Zone share**: planets that spent time inside the habitable zone this epoch |
+| 20 percent of `pool` | **Life pool**, paid once per season (section 7) |
+| 10 percent of `pool` | **Operations**. Accounted in `opsAccrued` (`GET /api/treasury`). It stays in the treasury until moved by a person to `OPS_WALLET`; the server never moves it automatically. |
 
 Rounding remainders of the zone share, and the whole zone share of an epoch in which no planet was eligible,
 roll into the Life pool.
 
-## 4. Who earns the zone share
+## 5. Who earns the zone share
 
 - A wallet gets a planet when it holds at least 0.01 percent of supply. Every 0.01 percent is 1 mass,
   capped at 25 (0.25 percent). Mass uses the **lowest** balance held over the last 24 hours.
@@ -71,60 +82,76 @@ roll into the Life pool.
 - Orbits drift every hour from a seed that includes a daily blockhash (published at `GET /api/seeds`),
   so paths cannot be chosen in advance. A burn moves an orbit 2 percent in or out; one burn per day is free.
 
-## 5. Minimum payout and weekly sweep
+## 6. Minimum payout and weekly sweep
 
-Amounts under 0.001 SOL (`MIN_PAYOUT_LAMPORTS`) carry over to the next epoch. Every 7th epoch
-(`SWEEP_EVERY_EPOCHS`) all carried amounts are paid regardless of size.
+Amounts under 1 $LAUNCH (`MIN_PAYOUT_LAUNCH`, or `MIN_PAYOUT_UNITS` in raw units) carry over to the next epoch.
+Every 7th epoch (`SWEEP_EVERY_EPOCHS`) all carried amounts are paid regardless of size.
 
-## 6. Life pool and seasons
+## 7. Life pool and seasons
 
 A planet that spends 400 hours in the zone reaches the stage Life (stages: Barren 0, Prebiotic 12,
 Microbial 48, Multicellular 120, Complex 240, Life 400 hours). Leaving the zone removes 2 hours of progress per hour outside.
 Seasons are UTC calendar quarters. The first epoch of a new quarter splits the whole Life pool by mass among every
 planet that reached Life during the previous quarter, then evolution resets for everyone.
 
-## 7. How to verify an epoch yourself
+## 8. How to verify an epoch yourself
 
 1. `GET /api/ledger/<epoch>` returns the epoch record:
-   - `source.txs`: every deposit signature that funded the pool with its lamports;
+   - `source`: `mint`, `tokenAccount`, `slot`, `balance`, `committed` (lifePool, carry, ops, unsent), `free`, `shareBps`, `amount`;
    - `pool`, `split.zone`, `split.lifePool`, `split.ops`;
-   - `payouts`: wallet, lamports, status and **payout signature**.
-2. Look up each `source.txs[].sig` in any explorer and confirm the treasury balance change equals `lamports`.
-3. Check that `pool` equals the sum of `source.txs[].lamports`, and that the split is 70 / 20 / 10 of `pool`
-   (floor rounding; burn SOL added to the zone share).
-4. Look up each payout `sig` and confirm the transfer from the treasury to that wallet.
-5. Cross-check the treasury's full history in an explorer: every inflow should appear in exactly one epoch's
-   `source.txs` (except burns and `FEE_IGNORE_FROM` senders), and every outflow should be a payout or a published operations transfer.
-6. `GET /api/fees` shows deposits counted since the last close (`pendingTxs`) and the scanner status.
-   `GET /api/epochs` lists recent epochs; `GET /api/earnings/<wallet>` lists one wallet's payouts.
+   - `payouts`: wallet, amount (raw $LAUNCH units), status and **payout signature**.
+2. Open `source.tokenAccount` in an explorer and confirm it is the treasury's token account for `source.mint`
+   and that its balance at `source.slot` equals `source.balance`.
+3. Check `free = balance - committed.total` (never below zero), `pool = floor(free * shareBps / 10000)`, and that the
+   split is 70 / 20 / 10 of `pool` with floor rounding.
+4. Look up each payout `sig` and confirm a `TransferChecked` of that amount of `LAUNCH_MINT` from the treasury token
+   account to the wallet's associated token account.
+5. Cross-check the treasury token account's full history: every outflow should be a payout row or a published
+   operations transfer (`opsTransfers` in `GET /api/treasury`).
+6. `GET /api/treasury` shows what is committed right now; `GET /api/epochs` lists recent epochs;
+   `GET /api/earnings/<wallet>` lists one wallet's payouts.
 
-## 8. Configuration (environment variables, never committed)
+Amounts in the API are raw units. Divide by 10^`rewardDecimals` (`GET /api/game`, 6 by default) for whole $LAUNCH.
+
+## 9. Configuration (environment variables, never committed)
 
 | Variable | Meaning |
 |----------|---------|
-| `TREASURY_ADDRESS` | Public address whose deposits fund the pool. Defaults to the payout key's address. |
-| `TREASURY_FILE` | Path to the payout key file on the server. Never in this repository. |
-| `FEE_SOURCE` | `chain` (default) or `manual` |
-| `FEE_POOL_LAMPORTS` | Pool used when `FEE_SOURCE=manual` |
-| `FEE_IGNORE_FROM` | Comma list of sender wallets whose deposits are not income |
-| `TREASURY_RESERVE_LAMPORTS` | Balance kept back for network fees (default 10000000) |
-| `OPS_WALLET` | Published destination for the operations share (moved manually) |
+| `LAUNCH_MINT` | $LAUNCH mint address. Every reward is paid in this token. |
+| `LAUNCH_DECIMALS` | Decimals of $LAUNCH (default 6). The server refuses to pay if this differs from the mint on chain. |
+| `TOKEN_MINT` | $GOLDILOCKS mint. Holdings give planet mass. |
+| `TREASURY_FILE` | Path to the treasury key file on the server. Never in this repository. Its address is the public treasury. |
+| `POOL_SOURCE` | `chain` (default when `LAUNCH_MINT` is set) or `manual` |
+| `POOL_SHARE_BPS` | Share of the free treasury balance released per epoch, in basis points (default 10000) |
+| `MANUAL_POOL_UNITS` | Pool in raw units when `POOL_SOURCE=manual` |
+| `MIN_PAYOUT_LAUNCH` / `MIN_PAYOUT_UNITS` | Minimum payout, in whole $LAUNCH or raw units (default 1 $LAUNCH) |
+| `TREASURY_SOL_RESERVE_LAMPORTS` | SOL always kept for network fees (default 0.02 SOL) |
+| `SOL_PER_PAYOUT_LAMPORTS` | SOL budget per payout row: fee plus new token account rent (default 0.0021 SOL) |
+| `OPS_WALLET` | Published destination for the operations share (moved manually, in $LAUNCH) |
 | `PAYOUT_MODE` | `dry` records the plan without sending; `live` sends (on mainnet only together with `MAINNET_ENABLED=1`) |
 | `MAINNET_ENABLED` | Must be `1` for any mainnet connection at all |
+| `PAYOUT_BATCH` | Rows per payout transaction (default 5) |
 | `PRIORITY_MICROLAMPORTS` | Priority fee per compute unit (default 20000) |
-| `MAX_PAYOUT_PER_WALLET_LAMPORTS` | Sanity cap per wallet per epoch (default 5 SOL) |
-| `MAX_PAYOUT_PER_EPOCH_LAMPORTS` | Sanity cap per epoch (default 50 SOL) |
+| `MAX_PAYOUT_PER_WALLET_LAUNCH` / `_UNITS` | Sanity cap per wallet per epoch (default 5,000,000 $LAUNCH) |
+| `MAX_PAYOUT_PER_EPOCH_LAUNCH` / `_UNITS` | Sanity cap per epoch (default 50,000,000 $LAUNCH) |
 | `PAYOUTS_PAUSED` | `1` pauses every transfer (kill switch that cannot be lifted from the admin API) |
-| `EXCLUDE_WALLETS` | Treasury, deployer, bonding curve, pool and team wallets: never a planet, never paid |
+| `EXCLUDE_WALLETS` | Never a planet, never paid. Set: treasury (added automatically), `OPS_WALLET`, the uselaunch master wallet, the LaunchLab bonding-curve vault for $GOLDILOCKS, the Raydium pool vault after migration, burn addresses, team wallets |
 
-## 9. How payouts are sent (`api/lib/payout.js`, `api/lib/engine.js`, `api/lib/chain.js`)
+Removed with the move to uselaunch: `FEE_SOURCE`, `FEE_POOL_LAMPORTS`, `FEE_IGNORE_FROM`, `TREASURY_ADDRESS`,
+`MIN_PAYOUT_LAMPORTS`, `MAX_PAYOUT_PER_*_LAMPORTS` and `GET /api/fees` as a fee scanner (it now returns the same as
+`GET /api/treasury`).
 
-1. **The plan is fixed at close.** When an epoch closes, every payout row (wallet, lamports) is stored. Dry and live
+## 10. How payouts are sent (`api/lib/payout.js`, `api/lib/engine.js`, `api/lib/chain.js`)
+
+1. **The plan is fixed at close.** When an epoch closes, every payout row (wallet, amount in raw $LAUNCH units) is stored. Dry and live
    runs use the same plan. Rows recorded as `dry-run` are final and are never sent by a later live run.
 2. **Guards, before anything is signed:** kill switch, excluded wallets (marked `excluded`), per-wallet cap,
-   per-epoch cap, treasury balance at least the unpaid total plus the reserve. If any guard fails the epoch is
+   per-epoch cap, treasury $LAUNCH balance at least the unpaid total, treasury SOL balance at least the reserve plus
+   `SOL_PER_PAYOUT_LAMPORTS` for each row (network fee and, for a first payout, the new token account's rent). If any guard fails the epoch is
    marked `held` with the reason and nothing moves.
-3. **Batches.** Up to 10 transfers per transaction (`PAYOUT_BATCH`), with a compute budget and a priority fee.
+3. **Batches.** Up to 5 rows per transaction (`PAYOUT_BATCH`), with a compute budget and a priority fee. Each row is
+   two instructions: Associated Token Account `CreateIdempotent` for the winner (creates the account only if missing)
+   and Token `TransferChecked` from the treasury's $LAUNCH account (mint and decimals checked on chain).
    A batch is atomic: all its transfers land or none do.
 4. **Sign, persist, then send.** The signature of each batch is written to the state file before the
    transaction is broadcast. The same signed bytes are rebroadcast every 2 seconds until confirmed or until the
@@ -135,5 +162,5 @@ planet that reached Life during the previous quarter, then evolution resets for 
    So a crash before or after broadcasting can never pay a wallet twice.
 6. **Records.** Every confirmed row keeps its transaction signature, shown in `GET /api/ledger/<epoch>` and
    appended to the server's payout ledger.
-7. **Operations share.** Only an admin call moves it, only to `OPS_WALLET`, never more than the accounted
-   `opsAccrued - opsSent`, and never while an earlier operations transfer is unconfirmed. Each transfer is listed in `GET /api/fees` (`opsTransfers`).
+7. **Operations share.** Paid in $LAUNCH. Only an admin call moves it, only to `OPS_WALLET`, never more than the accounted
+   `opsAccrued - opsSent`, and never while an earlier operations transfer is unconfirmed. Each transfer is listed in `GET /api/treasury` (`opsTransfers`).

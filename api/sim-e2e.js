@@ -1,3 +1,5 @@
+// NOTE: written for the earlier SOL payout model (creator fees and burn SOL in the pool). Payouts are now in $LAUNCH
+// (see docs/PAYOUTS.md); the payout checks below need updating before this script is used again. Not part of npm test.
 // Full game play-through against a running API and a Solana cluster (localnet or devnet). Never mainnet.
 // Phase "setup": creates the test mint and wallets, distributes balances. Phase "play": claims, burns, epochs, payouts, checks.
 'use strict';
