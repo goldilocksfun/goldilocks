@@ -8,4 +8,6 @@ assert.equal(tr.programId.toBase58(),TOKEN.toBase58());assert.equal(tr.data[0],1
 assert.equal(tr.keys[0].pubkey.toBase58(),C.ataOf(from.publicKey,m).toBase58());assert.equal(tr.keys[1].pubkey.toBase58(),m.mint.toBase58());assert(tr.keys[3].isSigner);console.log('ok TransferChecked from the treasury token account with amount and decimals');
 const n=+(process.env.PAYOUT_BATCH||5);const tx=new w.Transaction({feePayer:from.publicKey,blockhash:w.Keypair.generate().publicKey.toBase58(),lastValidBlockHeight:1}).add(...C.budget(n,40000));
 for(let i=0;i<n;i++)tx.add(...C.payIxs(from.publicKey,w.Keypair.generate().publicKey.toBase58(),1e6,m));tx.sign(from);const len=tx.serialize().length;assert(len<=1232,'batch '+len);console.log('ok batch of',n,'rows is',len,'bytes (limit 1232)');
-console.log('PASS spl tests');
+(async()=>{const other=w.Keypair.generate();const msg=new w.TransactionMessage({payerKey:other.publicKey,recentBlockhash:w.Keypair.generate().publicKey.toBase58(),instructions:[w.SystemProgram.transfer({fromPubkey:other.publicKey,toPubkey:from.publicKey,lamports:1})]}).compileToV0Message();
+  const b64=Buffer.from(new w.VersionedTransaction(msg).serialize()).toString('base64');await assert.rejects(C.signSendRaw(from,b64),/treasury only/);console.log('ok swap transaction not paid by the treasury is refused before signing');
+  console.log('PASS spl tests');})().catch(e=>{console.error(e);process.exit(1);});

@@ -22,14 +22,33 @@ SOL (section 2), because a burn is a game action, not a reward.
 Rewards come from one public **treasury address** (`treasury` in `GET /api/game` and `GET /api/treasury`). Its
 $LAUNCH sits in the treasury's associated token account for `LAUNCH_MINT` (`treasuryTokenAccount` in `GET /api/treasury`).
 
-How $LAUNCH reaches the treasury is not decided by the code: the pool is simply whatever free $LAUNCH the treasury
-holds at the close (section 3). Every deposit is a normal token transfer that anyone can see in an explorer.
-The funding source is published separately by the team and must not be assumed from this document.
+The treasury is funded from two sources, both visible on chain:
 
-**Thruster burns.** A paid burn sends 0.01 SOL (`THRUST_LAMPORTS`) to the treasury with a memo
-`goldilocks burn <in|out> <wallet> <nonce>`. This SOL is not part of the $LAUNCH pool. It stays in the treasury and
-pays network fees and the rent for new token accounts when winners are paid for the first time (`thrusterSol` in
-`GET /api/game` is the running total).
+- **Initial seed.** At launch the team buys $LAUNCH on the open market and sends it to the treasury. This is a normal
+  token transfer into the treasury token account.
+- **Thruster fees, converted daily.** A paid burn sends 0.01 SOL (`THRUST_LAMPORTS`) to the treasury with a memo
+  `goldilocks burn <in|out> <wallet> <nonce>` (`thrusterSol` in `GET /api/game` is the running total). Shortly before
+  each close, the SOL above a reserve is swapped into $LAUNCH through Jupiter (section 3a). The reserve (default
+  0.1 SOL) stays as SOL to pay network fees and the rent for new token accounts when winners are paid the first time.
+
+### 3a. Daily SOL to $LAUNCH swap (`api/lib/swap.js`)
+
+Run once per epoch, just before the pool is measured. Off unless `SWAP_ENABLED=1`.
+
+```
+amount = min(treasury SOL - SOL_RESERVE, SWAP_MAX_LAMPORTS_PER_DAY)     skipped if below SWAP_MIN_LAMPORTS
+```
+
+- A Jupiter quote (SOL in, $LAUNCH out, slippage at most `SWAP_SLIPPAGE_BPS`) is requested and checked: mints,
+  amount and slippage must match what was asked for.
+- In dry payout mode only the quote is recorded (status `quoted`). In live mode the Jupiter transaction is checked
+  (the treasury must be the fee payer and the only signer), signed, and its signature stored before broadcast.
+  Jupiter creates the treasury's Token-2022 $LAUNCH account if it does not exist.
+- One swap per epoch at most. A swap that timed out is never resent; its outcome is read from the chain later.
+  A failed swap does not stop the close: the SOL waits for the next day.
+- The record (SOL balance, reserve, amount, quote with minimum out and route, signature, status) is published as
+  `swap` in `GET /api/ledger/<epoch>`. Open the signature in an explorer to see SOL leave the treasury and $LAUNCH
+  arrive in the treasury token account.
 
 ## 3. How each epoch's pool is measured (`api/lib/pool.js`)
 
@@ -43,7 +62,7 @@ committed  = Life pool not yet awarded
            + operations share accounted but not yet moved
            + payout rows of earlier epochs still owed (pending, sending, unconfirmed or failed)
 free       = max(0, balance - committed)
-pool       = floor(free * POOL_SHARE_BPS / 10000)        default POOL_SHARE_BPS = 10000 (all of it)
+pool       = floor(free * POOL_SHARE_BPS / 10000)        default POOL_SHARE_BPS = 1000 (10 percent per day)
 ```
 
 Rules that follow from this:
@@ -52,8 +71,8 @@ Rules that follow from this:
   `committed`, so a later epoch can never hand it out again. New deposits become part of the next close.
 - **No stale numbers.** If the balance cannot be read the epoch stays open and is retried every 30 seconds.
   An epoch is never closed on an old or guessed balance.
-- **Slower release is a setting.** `POOL_SHARE_BPS` below 10000 releases only that share of the free balance each
-  day (for example 1000 = 10 percent per day), so one large deposit is spread over many days.
+- **10 percent per day.** By default only 10 percent of the free balance is released each day, so the seed and each
+  day's swap are spread over many days instead of paid out at once. `POOL_SHARE_BPS` changes this.
 - **Manual fallback.** `POOL_SOURCE=manual` uses `MANUAL_POOL_UNITS`. An admin may close an epoch with an explicit
   pool; such epochs are labeled `source: "manual"` in the public ledger.
 
@@ -84,7 +103,7 @@ roll into the Life pool.
 
 ## 6. Minimum payout and weekly sweep
 
-Amounts under 1 $LAUNCH (`MIN_PAYOUT_LAUNCH`, or `MIN_PAYOUT_UNITS` in raw units) carry over to the next epoch.
+Amounts under 50 $LAUNCH (`MIN_PAYOUT_LAUNCH`, or `MIN_PAYOUT_UNITS` in raw units) carry over to the next epoch.
 Every 7th epoch (`SWEEP_EVERY_EPOCHS`) all carried amounts are paid regardless of size.
 
 ## 7. Life pool and seasons
@@ -97,6 +116,7 @@ planet that reached Life during the previous quarter, then evolution resets for 
 ## 8. How to verify an epoch yourself
 
 1. `GET /api/ledger/<epoch>` returns the epoch record:
+   - `swap`: the day's SOL to $LAUNCH swap, with quote, signature and status (or null);
    - `source`: `mint`, `tokenAccount`, `slot`, `balance`, `committed` (lifePool, carry, ops, unsent), `free`, `shareBps`, `amount`;
    - `pool`, `split.zone`, `split.lifePool`, `split.ops`;
    - `payouts`: wallet, amount (raw $LAUNCH units), status and **payout signature**.
@@ -122,9 +142,15 @@ Amounts in the API are raw units. Divide by 10^`rewardDecimals` (`GET /api/game`
 | `TOKEN_MINT` | $GOLDILOCKS mint. Holdings give planet mass. |
 | `TREASURY_FILE` | Path to the treasury key file on the server. Never in this repository. Its address is the public treasury. |
 | `POOL_SOURCE` | `chain` (default when `LAUNCH_MINT` is set) or `manual` |
-| `POOL_SHARE_BPS` | Share of the free treasury balance released per epoch, in basis points (default 10000) |
+| `POOL_SHARE_BPS` | Share of the free treasury balance released per epoch, in basis points (default 1000) |
+| `SWAP_ENABLED` | `1` turns on the daily SOL to $LAUNCH swap (default `0`) |
+| `SOL_RESERVE` / `SOL_RESERVE_LAMPORTS` | SOL kept back from the swap (default 0.1 SOL) |
+| `SWAP_SLIPPAGE_BPS` | Maximum slippage for the swap (default 100 = 1 percent) |
+| `SWAP_MAX_LAMPORTS_PER_DAY` | Most SOL swapped per day (default 1 SOL) |
+| `SWAP_MIN_LAMPORTS` | Smaller amounts wait for the next day (default 0.01 SOL) |
+| `JUPITER_API` | Jupiter swap API base (default `https://lite-api.jup.ag/swap/v1`) |
 | `MANUAL_POOL_UNITS` | Pool in raw units when `POOL_SOURCE=manual` |
-| `MIN_PAYOUT_LAUNCH` / `MIN_PAYOUT_UNITS` | Minimum payout, in whole $LAUNCH or raw units (default 1 $LAUNCH) |
+| `MIN_PAYOUT_LAUNCH` / `MIN_PAYOUT_UNITS` | Minimum payout, in whole $LAUNCH or raw units (default 50 $LAUNCH) |
 | `TREASURY_SOL_RESERVE_LAMPORTS` | SOL always kept for network fees (default 0.02 SOL) |
 | `SOL_PER_PAYOUT_LAMPORTS` | SOL budget per payout row: fee plus new token account rent (default 0.0021 SOL) |
 | `OPS_WALLET` | Published destination for the operations share (moved manually, in $LAUNCH) |
@@ -132,8 +158,8 @@ Amounts in the API are raw units. Divide by 10^`rewardDecimals` (`GET /api/game`
 | `MAINNET_ENABLED` | Must be `1` for any mainnet connection at all |
 | `PAYOUT_BATCH` | Rows per payout transaction (default 5) |
 | `PRIORITY_MICROLAMPORTS` | Priority fee per compute unit (default 20000) |
-| `MAX_PAYOUT_PER_WALLET_LAUNCH` / `_UNITS` | Sanity cap per wallet per epoch (default 5,000,000 $LAUNCH) |
-| `MAX_PAYOUT_PER_EPOCH_LAUNCH` / `_UNITS` | Sanity cap per epoch (default 50,000,000 $LAUNCH) |
+| `MAX_PAYOUT_PER_WALLET_LAUNCH` / `_UNITS` | Sanity cap per wallet per epoch (default 500,000 $LAUNCH) |
+| `MAX_PAYOUT_PER_EPOCH_LAUNCH` / `_UNITS` | Sanity cap per epoch (default 5,000,000 $LAUNCH) |
 | `PAYOUTS_PAUSED` | `1` pauses every transfer (kill switch that cannot be lifted from the admin API) |
 | `EXCLUDE_WALLETS` | Never a planet, never paid. Set: treasury (added automatically), `OPS_WALLET`, the uselaunch master wallet, the LaunchLab bonding-curve vault for $GOLDILOCKS, the Raydium pool vault after migration, burn addresses, team wallets |
 

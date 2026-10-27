@@ -26,8 +26,8 @@ function modeFor({payoutMode,cluster,mainnetEnabled}){
 
 const num=(env,k,d)=>env[k]!=null&&env[k]!==''?+env[k]:d;
 function config(env=process.env){const dec=num(env,'LAUNCH_DECIMALS',6);return{
-  maxPerWallet:num(env,'MAX_PAYOUT_PER_WALLET_UNITS',num(env,'MAX_PAYOUT_PER_WALLET_LAUNCH',5e6)*10**dec),  // default 5,000,000 $LAUNCH to one wallet per epoch
-  maxPerEpoch:num(env,'MAX_PAYOUT_PER_EPOCH_UNITS',num(env,'MAX_PAYOUT_PER_EPOCH_LAUNCH',50e6)*10**dec),    // default 50,000,000 $LAUNCH per epoch
+  maxPerWallet:num(env,'MAX_PAYOUT_PER_WALLET_UNITS',num(env,'MAX_PAYOUT_PER_WALLET_LAUNCH',5e5)*10**dec),  // default 500,000 $LAUNCH to one wallet per epoch
+  maxPerEpoch:num(env,'MAX_PAYOUT_PER_EPOCH_UNITS',num(env,'MAX_PAYOUT_PER_EPOCH_LAUNCH',5e6)*10**dec),    // default 5,000,000 $LAUNCH per epoch
   solReserve:num(env,'TREASURY_SOL_RESERVE_LAMPORTS',num(env,'TREASURY_RESERVE_LAMPORTS',20e6)),             // 0.02 SOL always kept for fees
   solPerRow:num(env,'SOL_PER_PAYOUT_LAMPORTS',2.1e6),  // worst case per row: new token account rent (~0.00204 SOL) plus fees
   envPaused:env.PAYOUTS_PAUSED==='1',
