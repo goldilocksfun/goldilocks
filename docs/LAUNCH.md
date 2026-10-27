@@ -3,15 +3,29 @@
 No secrets belong in this repository. Keys and API keys are set only in the hosting provider's environment
 or secret files.
 
-1. **Freeze claims on the old service**, then export them with
+$GOLDILOCKS launches on uselaunch.fun (Raydium LaunchLab). The coin is created by the uselaunch master wallet, so the
+mint address is only known once the coin is live. Rewards are paid in $LAUNCH, not SOL (docs/PAYOUTS.md).
+
+Launch time: 2026-10-27 16:00 UTC (`LAUNCH_AT=1793116800000`). Free planets go live at that moment and start their
+24 hour wait.
+
+1. **Before launch: confirm the $LAUNCH mint.** Read it from uselaunch.fun and an explorer, check its decimals, and
+   set `LAUNCH_MINT` (and `LAUNCH_DECIMALS` if not 6). The server refuses to pay if the decimals do not match the mint.
+2. **Freeze claims on the old service**, then export them with
    `node api/migrate-claims.js --from <old service url> --to <new DATA_FILE>` (dry run: counts and diff),
    then the same command with `--apply`. Only claims, codes, X handles, X ids, reviews, the claim counter and the
    claim post id move; game state starts empty. Running it twice changes nothing.
-2. **Environment:** `CLUSTER=mainnet-beta`, `MAINNET_ENABLED=1`, `PAYOUT_MODE=dry` (switch to `live` after the first
-   day's ledger has been checked), `TOKEN_MINT`, `TREASURY_FILE` (secret file), `TREASURY_ADDRESS`, `OPS_WALLET`,
-   `FEE_SOURCE=chain`, `FEE_IGNORE_FROM` (wallets that top up the treasury for network fees), `EXCLUDE_WALLETS`
-   (treasury, operations, deployer, bonding curve, pool, team), `DATA_FILE` (new file), `LAUNCH_AT`, RPC settings.
-3. **Creator fees** are routed to `TREASURY_ADDRESS`. Fund the treasury with a small amount for network fees from a
-   wallet listed in `FEE_IGNORE_FROM`.
-4. **Day 1:** dry run. Compare `GET /api/ledger/<epoch>` with the treasury's history in an explorer (docs/PAYOUTS.md, section 7).
-5. **Go live:** set `PAYOUT_MODE=live`. Emergency stop: `PAYOUTS_PAUSED=1` or `POST /api/admin/pause`.
+3. **Create the coin on uselaunch.fun** from the @playgoldilocks X account (one coin per X account). Record the
+   $GOLDILOCKS mint and the LaunchLab bonding-curve vault from the creation transaction.
+4. **Environment:** `CLUSTER=mainnet-beta`, `MAINNET_ENABLED=1`, `PAYOUT_MODE=dry` (switch to `live` after the first
+   day's ledger has been checked), `TOKEN_MINT` ($GOLDILOCKS), `LAUNCH_MINT` ($LAUNCH), `TREASURY_FILE` (secret file),
+   `OPS_WALLET`, `POOL_SOURCE=chain`, `POOL_SHARE_BPS`, `MIN_PAYOUT_LAUNCH`, `EXCLUDE_WALLETS`, `DATA_FILE` (new file),
+   `LAUNCH_AT`, RPC settings.
+   `EXCLUDE_WALLETS`: `OPS_WALLET`, the uselaunch master wallet, the bonding-curve vault, burn addresses and team
+   wallets now; add the Raydium pool vault when the coin migrates. The treasury is excluded automatically.
+5. **Fund the treasury.** Send $LAUNCH to the treasury address (its token account is created by the first transfer),
+   and about 0.1 SOL for network fees and new token account rent. Each first payout to a wallet costs about 0.002 SOL
+   in rent. Thruster burns add SOL over time.
+6. **Day 1:** dry run. Compare `GET /api/ledger/<epoch>` with the treasury token account in an explorer
+   (docs/PAYOUTS.md, section 8). `POST /api/admin/pool-preview` shows the pool the next close would use.
+7. **Go live:** set `PAYOUT_MODE=live`. Emergency stop: `PAYOUTS_PAUSED=1` or `POST /api/admin/pause`.

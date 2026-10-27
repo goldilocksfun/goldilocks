@@ -1,6 +1,6 @@
 // Batched payouts: one tx per batch, fallback to single sends on batch failure, stored batch signature resolves all rows.
 'use strict';const assert=require('assert');process.env.PAYOUT_BATCH='10';const db={claims:{}};const E=require('./lib/engine').create(db,()=>{});
-const rows=n=>[...Array(n)].map((_,i)=>({wallet:'W'+i,lamports:2e6+i,status:'pending',sig:null}));const led=[];const onL=p=>led.push(p.wallet);
+const rows=n=>[...Array(n)].map((_,i)=>({wallet:'W'+i,amount:2e6+i,status:'pending',sig:null}));const led=[];const onL=p=>led.push(p.wallet);
 (async()=>{let batches=0,singles=0;const many=async(items,onSig)=>{batches++;onSig('B'+batches,9);return 'B'+batches;};const one=async(w,l,onSig)=>{singles++;onSig('S'+singles,9);return 'S'+singles;};
   let e={idx:1,payouts:rows(25)};await E.execute(e,'devnet',one,async()=>'unknown',many,onL);
   assert.equal(batches,3);assert.equal(singles,0);assert(e.payouts.every(p=>p.status==='sent'));assert.equal(led.length,25);assert.equal(new Set(e.payouts.map(p=>p.sig)).size,3);console.log('ok 25 rows in 3 batch transactions, ledger has 25 rows');
