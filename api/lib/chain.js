@@ -10,7 +10,7 @@ const conn=require('./pollconfirm')(new web3.Connection(RPC,'confirmed'));
 // Memo program used for burn memos (SPL Memo v2 by default, configurable). v1 memos are also accepted.
 const MEMO=new web3.PublicKey(process.env.MEMO_PROGRAM||'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
 const MEMOS=new Set(['MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr','Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo']);
-const TOKEN_PROGRAMS=['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA','TokenzQdBNbLqP5VEhdkAS6EPFLC1PqHrSHqbKbdB7y'];
+const TOKEN_PROGRAMS=['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA','TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'];
 // Loads a keypair file. A new key is generated only when the file does not exist; an unreadable or malformed
 // file is an error and is never overwritten (it may hold a real treasury key).
 function loadOrCreateKeypair(file){if(fs.existsSync(file))return web3.Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(file,'utf8'))));
