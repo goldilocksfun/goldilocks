@@ -122,14 +122,20 @@ const POOL=require('./lib/pool');
 const POOL_SOURCE=process.env.POOL_SOURCE||(chain&&GCFG.launchMint?'chain':'manual');
 const TREASURY_ADDRESS=treasury?treasury.publicKey.toBase58():'';
 async function measurePool(){return POOL.measure(E.S,()=>chain.tokenBalanceAt(TREASURY_ADDRESS),{treasury:TREASURY_ADDRESS,shareBps:E.C.POOL_SHARE_BPS});}
+// Daily SOL -> $LAUNCH swap (lib/swap.js), run just before the pool is measured. Off unless SWAP_ENABLED=1;
+// in dry payout mode it records the Jupiter quote only.
+const SWAP=require('./lib/swap');const SWAPCFG=SWAP.config();
+async function doSwap(idx){if(!SWAPCFG.enabled||!chain||!GCFG.launchMint||!treasury)return null;
+  return SWAP.run(E.S,idx,{fetch:(...a)=>fetch(...a),cfg:SWAPCFG,live:payMode()==='live',treasury,outMint:GCFG.launchMint,save,
+    chain:{balance:chain.balance,sigState:chain.sigState,signSendRaw:(b64,onSig)=>chain.signSendRaw(treasury,b64,onSig)}});}
 async function doEpoch(idx,pool){if(E.S.epochs.some(e=>e.idx===idx))return{already:true,epoch:E.S.epochs.find(e=>e.idx===idx)};
   let src;
   if(pool!=null)src={source:'manual',unit:'LAUNCH',amount:Math.floor(+pool)};
-  else if(POOL_SOURCE==='chain'&&chain){try{src=await measurePool();E.S.poolError=null;} // throws on any RPC failure: the epoch stays open and is retried, never closed on stale numbers
+  else if(POOL_SOURCE==='chain'&&chain){try{await doSwap(idx).then(()=>{E.S.swapError=null;},e=>{E.S.swapError=String(e.message||e).slice(0,200);});src=await measurePool();E.S.poolError=null;} // throws on any RPC failure: the epoch stays open and is retried, never closed on stale numbers
     catch(e){E.S.poolError=String(e.message||e).slice(0,200);save();throw e;}}
   else src={source:'manual',unit:'LAUNCH',amount:GCFG.manualPool};
   const r=E.closeEpoch(idx,src.amount);if(r.already)return r;
-  r.epoch.poolSource=src;
+  r.epoch.poolSource=src;if(E.S.swaps&&E.S.swaps[idx])r.epoch.swap=E.S.swaps[idx];
   E.S.opsAccrued=(E.S.opsAccrued||0)+r.epoch.ops;save(); // 10% operations share: accounted here, moved only by a person (see docs)
   await payEpoch(r.epoch);return r;}
 // One entry point for every payout run (daily close and admin retry). Guards live in lib/payout.js.
@@ -138,7 +144,7 @@ const payMode=()=>PAY.modeFor({payoutMode:GCFG.payoutMode,cluster:GCFG.cluster,m
 const payEpoch=e=>PAY.run(e,{E,S:E.S,save,mode:payMode(),chain,treasury,exclude:EXCL,ledger:ledgerAppend});
 // Public, verifiable record of one epoch: where the pool came from (signatures) and where it went (signatures).
 function epochRecord(e){return{idx:e.idx,closedAt:e.closedAt,unit:'LAUNCH',mint:GCFG.launchMint||null,source:e.poolSource||{source:'manual',amount:e.pool},pool:e.pool,
-  split:{zone:e.hz,lifePool:e.jackpotIn,ops:e.ops},totalWeight:e.totalWeight,lifePoolAfter:e.jackpotAfter,lifeAward:e.award,sweep:!!e.sweep,held:e.held||null,mode:e.mode||null,
+  swap:e.swap||null,split:{zone:e.hz,lifePool:e.jackpotIn,ops:e.ops},totalWeight:e.totalWeight,lifePoolAfter:e.jackpotAfter,lifeAward:e.award,sweep:!!e.sweep,held:e.held||null,mode:e.mode||null,
   payouts:e.payouts.map(x=>({wallet:x.wallet,amount:x.amount,status:x.status,sig:x.sig})),carry:e.carry};}
 // Daily drift seed: a recent blockhash recorded once per UTC day (published in /api/seeds for audit).
 async function ensureSeed(){const day=G.dayOf(Date.now());if(E.S.seeds&&E.S.seeds[day]||!chain)return;const {blockhash}=await chain.conn.getLatestBlockhash('finalized');E.setDaySeed(day,blockhash);}
@@ -163,7 +169,7 @@ async function gameRoute(req,res,u,p,ip){
   // Treasury view for outside verification: addresses, what is already promised, and the operations transfers.
   if((p==='/api/treasury'||p==='/api/fees')&&req.method==='GET'){const c=POOL.committed(E.S);let live=null;if(u.searchParams.get('live')==='1'&&chain&&GCFG.launchMint&&!limited(ip,'trs',6,60e3)){try{live=await measurePool();}catch(e){live={error:String(e.message).slice(0,120)};}}
     return send(req,res,200,{source:POOL_SOURCE,unit:'LAUNCH',launchMint:GCFG.launchMint||null,treasury:TREASURY_ADDRESS||null,treasuryTokenAccount:chain&&GCFG.launchMint&&TREASURY_ADDRESS?await chain.launchMint().then(m=>chain.ataOf(TREASURY_ADDRESS,m).toBase58()).catch(()=>null):null,
-      committed:c,poolShareBps:E.C.POOL_SHARE_BPS,lastError:E.S.poolError||null,next:live,opsAccrued:E.S.opsAccrued||0,opsSent:E.S.opsSent||0,opsTransfers:E.S.opsTransfers||[],opsWallet:process.env.OPS_WALLET||null,thrusterSol:E.S.thrusterSol||0,payoutMode:payMode(),paused:!!E.S.paused||process.env.PAYOUTS_PAUSED==='1'});}
+      committed:c,poolShareBps:E.C.POOL_SHARE_BPS,swap:{enabled:SWAPCFG.enabled,reserveLamports:SWAPCFG.reserve,slippageBps:SWAPCFG.slippageBps,maxLamportsPerDay:SWAPCFG.maxPerDay,lastError:E.S.swapError||null},lastError:E.S.poolError||null,next:live,opsAccrued:E.S.opsAccrued||0,opsSent:E.S.opsSent||0,opsTransfers:E.S.opsTransfers||[],opsWallet:process.env.OPS_WALLET||null,thrusterSol:E.S.thrusterSol||0,payoutMode:payMode(),paused:!!E.S.paused||process.env.PAYOUTS_PAUSED==='1'});}
   if((m=p.match(/^\/api\/ledger\/(\d+)$/))&&req.method==='GET'){const e=E.S.epochs.find(x=>x.idx===+m[1]);if(!e)return send(req,res,404,{error:'No such epoch.'});return send(req,res,200,epochRecord(e));}
   if(p==='/api/seeds'&&req.method==='GET')return send(req,res,200,{seeds:E.S.seeds||{}});
   if(p==='/api/leaderboard'&&req.method==='GET')return send(req,res,200,{planets:E.leaderboard()});

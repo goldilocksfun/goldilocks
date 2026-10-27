@@ -85,7 +85,19 @@ async function transferMany(from,items,onSig,hook){const m=await launchMint();fo
 const transfer=(from,to,amount,onSig,hook)=>transferMany(from,[{to,amount}],onSig,hook);
 // Plain SOL transfer, used only by the devnet-only admin fund route.
 const transferSol=(from,to,lamports,onSig,hook)=>signAndSend(from,[web3.SystemProgram.transfer({fromPubkey:from.publicKey,toPubkey:new web3.PublicKey(to),lamports})],300,1,onSig,hook);
+// Signs a swap transaction built by Jupiter with the treasury key. Before signing it checks that the treasury is the
+// fee payer and the only required signer, so the transaction cannot spend from any other authority.
+// The signature is reported through onSig before broadcast; the same bytes are rebroadcast until confirmed or expired.
+async function signSendRaw(from,b64,onSig){const tx=web3.VersionedTransaction.deserialize(Buffer.from(b64,'base64'));const m=tx.message;
+  if(m.header.numRequiredSignatures!==1||!m.staticAccountKeys[0].equals(from.publicKey))throw new Error('swap transaction must be paid and signed by the treasury only');
+  tx.sign([from]);const raw=tx.serialize();const sig=bs58.encode(tx.signatures[0]);
+  const lvh=(await conn.getLatestBlockhash('confirmed')).lastValidBlockHeight;if(onSig)onSig(sig,lvh);
+  await conn.sendRawTransaction(raw,{skipPreflight:false,preflightCommitment:'confirmed',maxRetries:0});
+  for(let i=0;i<90;i++){await new Promise(z=>setTimeout(z,2000));const r=(await conn.getSignatureStatuses([sig])).value[0];
+    if(r){if(r.err)throw new Error('Swap failed: '+JSON.stringify(r.err));if(r.confirmationStatus==='confirmed'||r.confirmationStatus==='finalized')return sig;continue;}
+    if((await conn.getBlockHeight('confirmed'))>lvh)throw new Error('Swap expired: '+sig);try{await conn.sendRawTransaction(raw,{skipPreflight:true,maxRetries:0});}catch(e){}}
+  throw new Error('Swap confirmation timeout: '+sig);}
 // State of an earlier payment: 'landed', 'failed', 'expired' (safe to resend) or 'unknown' (wait).
 async function sigState(sig,lvh){const r=(await conn.getSignatureStatuses([sig],{searchTransactionHistory:true})).value[0];if(r)return r.err?'failed':'landed';
   if(lvh&&(await conn.getBlockHeight('confirmed'))>lvh+10)return 'expired';return 'unknown';}
-module.exports={web3,conn,CLUSTER,MAINNET_ENABLED,MEMO,LAUNCH_MINT,launchMint,ataOf,payIxs,budget,tokenBalance,tokenBalanceAt,loadOrCreateKeypair,supply,holders,verifyBurn,transfer,transferMany,transferSol,sigState,balance:pk=>conn.getBalance(new web3.PublicKey(pk))};
+module.exports={web3,conn,CLUSTER,MAINNET_ENABLED,MEMO,LAUNCH_MINT,launchMint,ataOf,payIxs,budget,tokenBalance,tokenBalanceAt,loadOrCreateKeypair,supply,holders,verifyBurn,transfer,transferMany,transferSol,signSendRaw,sigState,balance:pk=>conn.getBalance(new web3.PublicKey(pk))};

@@ -20,11 +20,11 @@ assert.equal(G.stageOf(0,C),'Barren');assert.equal(G.stageOf(400,C),'Life');ok('
 // payout math
 {const r=G.computeEpoch({weights:{a:3,b:1},pool:1e9},C);assert.equal(r.hz,7e8);assert.equal(r.jp,2e8);assert.equal(r.ops,1e8);assert.equal(r.shares.a,525e6);assert.equal(r.shares.b,175e6);
  const t=Object.values(r.pay).reduce((x,y)=>x+y,0)+r.jackpot+r.ops+Object.values(r.carry).reduce((x,y)=>x+y,0);assert.equal(t,1e9);ok('token unit conservation');}
-{const r=G.computeEpoch({weights:{a:1e7,b:1},pool:1e9},C);assert(!r.pay.b&&r.carry.b>0);const r2=G.computeEpoch({weights:{b:1},pool:2e6,carry:r.carry},C);assert(r2.pay.b>=C.MIN_PAYOUT_UNITS);ok('min payout carryover then paid');}
+{const r=G.computeEpoch({weights:{a:1e7,b:1},pool:1e9},C);assert(!r.pay.b&&r.carry.b>0);const r2=G.computeEpoch({weights:{b:1},pool:1e8,carry:r.carry},C);assert(r2.pay.b>=C.MIN_PAYOUT_UNITS);ok('min payout carryover then paid');}
 {const r=G.computeEpoch({weights:{},pool:1e9,jackpotBefore:5},C);assert.equal(r.jackpot,5+2e8+7e8);ok('empty zone sends HZ pool to jackpot');
  const r2=G.computeEpoch({weights:{a:1},pool:1e9,jackpotBefore:1e8,lifeMass:{a:3,b:1}},C);assert.equal(r2.pay.b,75e6);assert.equal(r2.award.split.a,225e6);assert.equal(r2.jackpot,0);ok('season life jackpot split by mass');
- const r3=G.computeEpoch({weights:{a:1},pool:0,carry:{b:5e5}},C);assert(!r3.pay.b&&r3.carry.b===5e5);const r4=G.computeEpoch({weights:{a:1},pool:0,carry:{b:5e5},sweep:true},C);assert.equal(r4.pay.b,5e5);ok('min payout 1 $LAUNCH, weekly sweep pays carry');
- assert.equal(C.MIN_PAYOUT_UNITS,1e6);assert.equal(C.LAUNCH_DECIMALS,6);assert.equal(C.MASS_CAP_BPS,25);
+ const r3=G.computeEpoch({weights:{a:1},pool:0,carry:{b:5e5}},C);assert(!r3.pay.b&&r3.carry.b===5e5);const r4=G.computeEpoch({weights:{a:1},pool:0,carry:{b:5e5},sweep:true},C);assert.equal(r4.pay.b,5e5);ok('min payout 50 $LAUNCH, weekly sweep pays carry');
+ assert.equal(C.MIN_PAYOUT_UNITS,50e6);assert.equal(C.POOL_SHARE_BPS,1000);assert.equal(C.LAUNCH_DECIMALS,6);assert.equal(C.MASS_CAP_BPS,25);
  {const f=G.newPlanet(W[2],'free',0);f.freeSince=0;f.mass=1;f.a=1.1;G.tickPlanet(f,1,23*3600e3,C);assert(!f.eligible);G.tickPlanet(f,2,24*3600e3,C);assert(f.eligible);ok('free planets wait 24h');}}
 {const r=G.computeEpoch({weights:{a:1},pool:0},C);assert.equal(r.hz,0);assert.deepEqual(r.pay,{});ok('empty pool pays nothing');}
 // engine idempotency and min hold

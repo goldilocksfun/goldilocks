@@ -22,8 +22,8 @@ function config(){return{
   // Rewards are paid in $LAUNCH (SPL token, mint LAUNCH_MINT). Every reward amount in the engine is in raw base units
   // of that token (1 $LAUNCH = 10^LAUNCH_DECIMALS units).
   LAUNCH_DECIMALS:num('LAUNCH_DECIMALS',6),
-  MIN_PAYOUT_UNITS:num('MIN_PAYOUT_UNITS',Math.round(num('MIN_PAYOUT_LAUNCH',1)*10**num('LAUNCH_DECIMALS',6))), // default 1 $LAUNCH
-  POOL_SHARE_BPS:num('POOL_SHARE_BPS',10000),   // share of the treasury's free $LAUNCH balance released per epoch (10000 = all of it)
+  MIN_PAYOUT_UNITS:num('MIN_PAYOUT_UNITS',Math.round(num('MIN_PAYOUT_LAUNCH',50)*10**num('LAUNCH_DECIMALS',6))), // default 50 $LAUNCH
+  POOL_SHARE_BPS:num('POOL_SHARE_BPS',1000),    // share of the treasury's free $LAUNCH balance released per epoch (1000 = 10 percent per day)
   SWEEP_EVERY_EPOCHS:num('SWEEP_EVERY_EPOCHS',7), // weekly: carryovers below the minimum are paid out regardless
   LAUNCH_AT:num('LAUNCH_AT',0),                   // token launch time (ms). Free planets exist and start their 24h wait only from here
   EPOCH_MS:num('EPOCH_MS',24*3600e3),

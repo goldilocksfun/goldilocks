@@ -23,9 +23,11 @@ Launch time: 2026-10-27 16:00 UTC (`LAUNCH_AT=1793116800000`). Free planets go l
    `LAUNCH_AT`, RPC settings.
    `EXCLUDE_WALLETS`: `OPS_WALLET`, the uselaunch master wallet, the bonding-curve vault, burn addresses and team
    wallets now; add the Raydium pool vault when the coin migrates. The treasury is excluded automatically.
-5. **Fund the treasury.** Send $LAUNCH to the treasury address (its token account is created by the first transfer),
-   and about 0.1 SOL for network fees and new token account rent. Each first payout to a wallet costs about 0.002 SOL
-   in rent. Thruster burns add SOL over time.
+5. **Fund the treasury.** Buy the initial $LAUNCH seed at launch and send it to the treasury address (its token
+   account is created by the first transfer), plus about 0.1 SOL as the reserve for network fees and new token account
+   rent (each first payout to a wallet costs about 0.002 SOL). Thruster burns add SOL over time.
+   Swap settings: `SWAP_ENABLED=1`, `SOL_RESERVE=0.1`, `SWAP_SLIPPAGE_BPS`, `SWAP_MAX_LAMPORTS_PER_DAY`. In dry payout
+   mode the daily swap is quoted only; check the `swap` record on the first ledger before going live.
 6. **Day 1:** dry run. Compare `GET /api/ledger/<epoch>` with the treasury token account in an explorer
    (docs/PAYOUTS.md, section 8). `POST /api/admin/pool-preview` shows the pool the next close would use.
 7. **Go live:** set `PAYOUT_MODE=live`. Emergency stop: `PAYOUTS_PAUSED=1` or `POST /api/admin/pause`.

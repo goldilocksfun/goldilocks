@@ -2,7 +2,7 @@
 
 A live planet formation simulation where every wallet is a world.
 
-Each holder is a planet with a real orbit around a real star type. Only planets inside the habitable zone earn. Every planet that reaches full life within a season shares the Life jackpot by mass. Seasons last one calendar quarter, and the jackpot resets each season. Free planets go live at launch and, like holders, earn only after 24 hours. Rewards are paid in $LAUNCH. Payouts below 1 $LAUNCH carry over and are swept weekly. Outcomes come from orbital mechanics, not a lottery.
+Each holder is a planet with a real orbit around a real star type. Only planets inside the habitable zone earn. Every planet that reaches full life within a season shares the Life jackpot by mass. Seasons last one calendar quarter, and the jackpot resets each season. Free planets go live at launch and, like holders, earn only after 24 hours. Rewards are paid in $LAUNCH. Payouts below 50 $LAUNCH carry over and are swept weekly. Outcomes come from orbital mechanics, not a lottery.
 
 Website: https://goldilockszone.fun  
 X: https://x.com/playgoldilocks  
@@ -39,10 +39,11 @@ The game engine in `api/` applies these rules. How the daily pool is measured on
 - Mass scales linearly with holdings, from 1 at 0.01 percent of supply up to 25 at the 0.25 percent cap. Holdings above 0.25 percent add no mass.
 - Holdings count after they have been held for 24 hours.
 - Rewards: every reward is paid in $LAUNCH (SPL token), never in SOL.
-- Pool: at 12:00 UTC each day the pool is the $LAUNCH held by the public treasury that is not already promised to anyone (Life pool, carried-over rewards, unmoved operations share, unpaid rows). Anyone can recompute it from the treasury token account.
+- Funding: the treasury starts with an initial $LAUNCH seed bought at launch. Thruster fees (0.01 SOL per burn) collect in the treasury and are swapped into $LAUNCH through Jupiter before each daily close; the swap signature is published with the epoch.
+- Pool: at 12:00 UTC each day, 10 percent of the treasury's available $LAUNCH is released. Available means not already promised to anyone (Life pool, carried-over rewards, unmoved operations share, unpaid rows). Anyone can recompute it from the treasury token account.
 - Split: 70 percent to planets inside the habitable zone (by mass multiplied by time in zone), 20 percent to the Life jackpot (paid once per season), 10 percent to operations.
-- Minimum payout: 1 $LAUNCH. Smaller amounts carry over and are paid at the weekly sweep.
-- Interventions: the first thruster burn each day is free, after that each burn costs 0.01 SOL. Burn SOL stays in the treasury to pay network fees and new token account rent for payouts.
+- Minimum payout: 50 $LAUNCH. Smaller amounts carry over and are paid at the weekly sweep.
+- Interventions: the first thruster burn each day is free, after that each burn costs 0.01 SOL. Burn SOL above a 0.1 SOL reserve is converted to $LAUNCH daily; the reserve pays network fees and new token account rent.
 - All times are UTC. Seasons are calendar quarters.
 
 ## Planets
